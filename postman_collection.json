@@ -1,0 +1,721 @@
+{
+	"info": {
+		"_postman_id": "21801d13-2523-403c-98ec-7951f358ee24",
+		"name": "Spring Boot Event Sourcing - Microservices",
+		"description": "Coleção completa para Command Service (8080) e Query Service (8081)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "21995942"
+	},
+	"item": [
+		{
+			"name": "Command Service (Port: 8080)",
+			"item": [
+				{
+					"name": "Criar Pedido",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"let raw = pm.response.text();",
+									"let pedidoId = null;",
+									"let numeroPedido = null;",
+									"let clienteId = null;",
+									"",
+									"try {",
+									"  const json = pm.response.json();",
+									"  pedidoId = json.pedidoId || json.id || null;",
+									"  numeroPedido = json.numeroPedido || null;",
+									"  clienteId = json.clienteId || null;",
+									"} catch (e) {",
+									"  // Fallback: extrai via regex se não for JSON",
+									"  const pedidoMatch = raw.match(/\"pedidoId\"\\s*:\\s*\"([^\"]+)\"/);",
+									"  const numeroMatch = raw.match(/\"numeroPedido\"\\s*:\\s*\"([^\"]+)\"/);",
+									"  const clienteMatch = raw.match(/\"clienteId\"\\s*:\\s*\"([^\"]+)\"/);",
+									"  ",
+									"  if (pedidoMatch) pedidoId = pedidoMatch[1];",
+									"  if (numeroMatch) numeroPedido = numeroMatch[1];",
+									"  if (clienteMatch) clienteId = clienteMatch[1];",
+									"}",
+									"",
+									"// Tenta extrair do header Location se não encontrou pedidoId",
+									"if (!pedidoId) {",
+									"  const loc = pm.response.headers.get('Location');",
+									"  if (loc) {",
+									"    const m = loc.match(/\\/pedidos\\/([0-9a-fA-F-]+)/);",
+									"    if (m) pedidoId = m[1];",
+									"  }",
+									"}",
+									"",
+									"// Validações",
+									"pm.test(\"pedidoId presente na resposta\", function () {",
+									"  pm.expect(pedidoId).to.be.a(\"string\").and.not.empty;",
+									"});",
+									"",
+									"pm.test(\"numeroPedido presente na resposta\", function () {",
+									"  pm.expect(numeroPedido).to.be.a(\"string\").and.not.empty;",
+									"});",
+									"",
+									"pm.test(\"clienteId presente na resposta\", function () {",
+									"  pm.expect(clienteId).to.be.a(\"string\").and.not.empty;",
+									"});",
+									"",
+									"// Salva nas variáveis de ambiente",
+									"if (pedidoId) {",
+									"  pm.environment.set(\"pedidoId\", pedidoId);",
+									"  console.log(\"✅ pedidoId salvo:\", pedidoId);",
+									"} else {",
+									"  console.warn(\"❌ pedidoId não encontrado\");",
+									"}",
+									"",
+									"if (numeroPedido) {",
+									"  pm.environment.set(\"numeroPedido\", numeroPedido);",
+									"  console.log(\"✅ numeroPedido salvo:\", numeroPedido);",
+									"} else {",
+									"  console.warn(\"❌ numeroPedido não encontrado\");",
+									"}",
+									"",
+									"if (clienteId) {",
+									"  pm.environment.set(\"clienteId\", clienteId);",
+									"  console.log(\"✅ clienteId salvo:\", clienteId);",
+									"} else {",
+									"  console.warn(\"❌ clienteId não encontrado\");",
+									"}",
+									"",
+									"// Log completo para debug",
+									"console.log(\"Resposta completa:\", raw);"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"numeroPedido\": \"PED-{{$randomInt}}\",\n  \"clienteId\": \"{{$guid}}\",\n  \"clienteNome\": \"Cliente Teste\",\n  \"clienteEmail\": \"teste@email.com\",\n  \"itens\": [\n    {\n      \"produtoId\": \"{{$guid}}\",\n      \"produtoNome\": \"Produto A\",\n      \"produtoDescricao\": \"Descrição do Produto A\",\n      \"quantidade\": 1,\n      \"precoUnitario\": 100.00\n    },\n    {\n      \"produtoId\": \"{{$guid}}\",\n      \"produtoNome\": \"Produto B\",\n      \"produtoDescricao\": \"Descrição do Produto B\",\n      \"quantidade\": 2,\n      \"precoUnitario\": 50.00\n    }\n  ],\n  \"enderecoEntrega\": {\n    \"logradouro\": \"Rua Teste\",\n    \"numero\": \"123\",\n    \"bairro\": \"Bairro Teste\",\n    \"cidade\": \"Cidade Teste\",\n    \"estado\": \"TS\",\n    \"cep\": \"12345-678\"\n  }\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/pedidos",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"pedidos"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Atualizar Pedido",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"itens\": [\n    {\n      \"produtoId\": \"{{$guid}}\",\n      \"produtoNome\": \"Produto C\",\n      \"produtoDescricao\": \"Descrição do Produto C\",\n      \"quantidade\": 3,\n      \"precoUnitario\": 75.00\n    }\n  ],\n  \"enderecoEntrega\": {\n    \"logradouro\": \"Nova Rua\",\n    \"numero\": \"456\",\n    \"bairro\": \"Novo Bairro\",\n    \"cidade\": \"Nova Cidade\",\n    \"estado\": \"NV\",\n    \"cep\": \"98765-432\"\n  },\n  \"observacoes\": \"Pedido atualizado\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/pedidos/{{pedidoId}}",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"pedidos",
+								"{{pedidoId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Atualizar Status",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"novoStatus\": \"CONFIRMADO\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/pedidos/{{pedidoId}}/status",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"pedidos",
+								"{{pedidoId}}",
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Cancelar Pedido",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"motivo\": \"Desistência\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/pedidos/{{pedidoId}}",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"pedidos",
+								"{{pedidoId}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Query Service (Port: 8081)",
+			"item": [
+				{
+					"name": "Buscar Pedido por ID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"let raw = pm.response.text();",
+									"let pedidoId = null;",
+									"let numeroPedido = null;",
+									"let clienteId = null;",
+									"",
+									"try {",
+									"  const json = pm.response.json();",
+									"  pedidoId = json.pedidoId || json.id || null;",
+									"  numeroPedido = json.numeroPedido || null;",
+									"  clienteId = json.clienteId || null;",
+									"} catch (e) {",
+									"  // Fallback: extrai via regex se não for JSON",
+									"  const pedidoMatch = raw.match(/\"pedidoId\"\\s*:\\s*\"([^\"]+)\"/);",
+									"  const numeroMatch = raw.match(/\"numeroPedido\"\\s*:\\s*\"([^\"]+)\"/);",
+									"  const clienteMatch = raw.match(/\"clienteId\"\\s*:\\s*\"([^\"]+)\"/);",
+									"  ",
+									"  if (pedidoMatch) pedidoId = pedidoMatch[1];",
+									"  if (numeroMatch) numeroPedido = numeroMatch[1];",
+									"  if (clienteMatch) clienteId = clienteMatch[1];",
+									"}",
+									"",
+									"// Tenta extrair do header Location se não encontrou pedidoId",
+									"if (!pedidoId) {",
+									"  const loc = pm.response.headers.get('Location');",
+									"  if (loc) {",
+									"    const m = loc.match(/\\/pedidos\\/([0-9a-fA-F-]+)/);",
+									"    if (m) pedidoId = m[1];",
+									"  }",
+									"}",
+									"",
+									"// Validações",
+									"pm.test(\"pedidoId presente na resposta\", function () {",
+									"  pm.expect(pedidoId).to.be.a(\"string\").and.not.empty;",
+									"});",
+									"",
+									"pm.test(\"numeroPedido presente na resposta\", function () {",
+									"  pm.expect(numeroPedido).to.be.a(\"string\").and.not.empty;",
+									"});",
+									"",
+									"pm.test(\"clienteId presente na resposta\", function () {",
+									"  pm.expect(clienteId).to.be.a(\"string\").and.not.empty;",
+									"});",
+									"",
+									"// Salva nas variáveis de ambiente",
+									"if (pedidoId) {",
+									"  pm.environment.set(\"pedidoId\", pedidoId);",
+									"  console.log(\"✅ pedidoId salvo:\", pedidoId);",
+									"} else {",
+									"  console.warn(\"❌ pedidoId não encontrado\");",
+									"}",
+									"",
+									"if (numeroPedido) {",
+									"  pm.environment.set(\"numeroPedido\", numeroPedido);",
+									"  console.log(\"✅ numeroPedido salvo:\", numeroPedido);",
+									"} else {",
+									"  console.warn(\"❌ numeroPedido não encontrado\");",
+									"}",
+									"",
+									"if (clienteId) {",
+									"  pm.environment.set(\"clienteId\", clienteId);",
+									"  console.log(\"✅ clienteId salvo:\", clienteId);",
+									"} else {",
+									"  console.warn(\"❌ clienteId não encontrado\");",
+									"}",
+									"",
+									"// Log completo para debug",
+									"console.log(\"Resposta completa:\", raw);"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/pedidos/{{pedidoId}}",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"pedidos",
+								"{{pedidoId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Buscar Pedido Completo por ID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"let raw = pm.response.text();",
+									"let pedidoId = null;",
+									"let numeroPedido = null;",
+									"let clienteId = null;",
+									"",
+									"try {",
+									"  const json = pm.response.json();",
+									"  pedidoId = json.pedidoId || json.id || null;",
+									"  numeroPedido = json.numeroPedido || null;",
+									"  clienteId = json.clienteId || null;",
+									"} catch (e) {",
+									"  // Fallback: extrai via regex se não for JSON",
+									"  const pedidoMatch = raw.match(/\"pedidoId\"\\s*:\\s*\"([^\"]+)\"/);",
+									"  const numeroMatch = raw.match(/\"numeroPedido\"\\s*:\\s*\"([^\"]+)\"/);",
+									"  const clienteMatch = raw.match(/\"clienteId\"\\s*:\\s*\"([^\"]+)\"/);",
+									"  ",
+									"  if (pedidoMatch) pedidoId = pedidoMatch[1];",
+									"  if (numeroMatch) numeroPedido = numeroMatch[1];",
+									"  if (clienteMatch) clienteId = clienteMatch[1];",
+									"}",
+									"",
+									"// Tenta extrair do header Location se não encontrou pedidoId",
+									"if (!pedidoId) {",
+									"  const loc = pm.response.headers.get('Location');",
+									"  if (loc) {",
+									"    const m = loc.match(/\\/pedidos\\/([0-9a-fA-F-]+)/);",
+									"    if (m) pedidoId = m[1];",
+									"  }",
+									"}",
+									"",
+									"// Validações",
+									"pm.test(\"pedidoId presente na resposta\", function () {",
+									"  pm.expect(pedidoId).to.be.a(\"string\").and.not.empty;",
+									"});",
+									"",
+									"pm.test(\"numeroPedido presente na resposta\", function () {",
+									"  pm.expect(numeroPedido).to.be.a(\"string\").and.not.empty;",
+									"});",
+									"",
+									"pm.test(\"clienteId presente na resposta\", function () {",
+									"  pm.expect(clienteId).to.be.a(\"string\").and.not.empty;",
+									"});",
+									"",
+									"// Salva nas variáveis de ambiente",
+									"if (pedidoId) {",
+									"  pm.environment.set(\"pedidoId\", pedidoId);",
+									"  console.log(\"✅ pedidoId salvo:\", pedidoId);",
+									"} else {",
+									"  console.warn(\"❌ pedidoId não encontrado\");",
+									"}",
+									"",
+									"if (numeroPedido) {",
+									"  pm.environment.set(\"numeroPedido\", numeroPedido);",
+									"  console.log(\"✅ numeroPedido salvo:\", numeroPedido);",
+									"} else {",
+									"  console.warn(\"❌ numeroPedido não encontrado\");",
+									"}",
+									"",
+									"if (clienteId) {",
+									"  pm.environment.set(\"clienteId\", clienteId);",
+									"  console.log(\"✅ clienteId salvo:\", clienteId);",
+									"} else {",
+									"  console.warn(\"❌ clienteId não encontrado\");",
+									"}",
+									"",
+									"// Log completo para debug",
+									"console.log(\"Resposta completa:\", raw);"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/pedidos/{{pedidoId}}/completo",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"pedidos",
+								"{{pedidoId}}",
+								"completo"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Buscar Pedido por Número",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/pedidos/numero/{{numeroPedido}}",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"pedidos",
+								"numero",
+								"{{numeroPedido}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Buscar Pedido Completo por Número",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/pedidos/numero/{{numeroPedido}}/completo",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"pedidos",
+								"numero",
+								"{{numeroPedido}}",
+								"completo"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar por Cliente",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/pedidos/cliente/{{clienteId}}?page=0&size=10",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"pedidos",
+								"cliente",
+								"{{clienteId}}"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar por Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/pedidos/status/PENDENTE?page=0&size=10",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"pedidos",
+								"status",
+								"PENDENTE"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Buscar por Período",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/pedidos/periodo?inicio=2024-01-01T00:00:00Z&fim=2024-12-31T23:59:59Z&page=0&size=10",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"pedidos",
+								"periodo"
+							],
+							"query": [
+								{
+									"key": "inicio",
+									"value": "2024-01-01T00:00:00Z"
+								},
+								{
+									"key": "fim",
+									"value": "2024-12-31T23:59:59Z"
+								},
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Busca Flexível",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/pedidos/search?clienteId={{clienteId}}&status=CONFIRMADO&page=0&size=10",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"pedidos",
+								"search"
+							],
+							"query": [
+								{
+									"key": "clienteId",
+									"value": "{{clienteId}}"
+								},
+								{
+									"key": "status",
+									"value": "CONFIRMADO"
+								},
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Todos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/pedidos?page=0&size=10",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"pedidos"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Estatísticas por Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/pedidos/estatisticas/status/PENDENTE/count",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"pedidos",
+								"estatisticas",
+								"status",
+								"PENDENTE",
+								"count"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Estatísticas por Cliente",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/pedidos/estatisticas/cliente/{{clienteId}}/count",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"pedidos",
+								"estatisticas",
+								"cliente",
+								"{{clienteId}}",
+								"count"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Total Gasto por Cliente",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/pedidos/estatisticas/cliente/{{clienteId}}/total-gasto",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"pedidos",
+								"estatisticas",
+								"cliente",
+								"{{clienteId}}",
+								"total-gasto"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "pedidoId",
+			"value": ""
+		},
+		{
+			"key": "numeroPedido",
+			"value": ""
+		},
+		{
+			"key": "clienteId",
+			"value": "279d50f1-b2b2-4578-ad25-f14243f0905b"
+		}
+	]
+}
