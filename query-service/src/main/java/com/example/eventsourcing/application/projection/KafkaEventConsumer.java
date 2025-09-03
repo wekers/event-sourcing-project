@@ -3,6 +3,8 @@ package com.example.eventsourcing.application.projection;
 import com.example.eventsourcing.application.PedidoReadModelRepository;
 import com.example.eventsourcing.application.readmodel.PedidoReadModel;
 import com.example.eventsourcing.domain.pedido.events.*;
+import com.example.eventsourcing.infrastructure.OutboxEventEntity;
+import com.example.eventsourcing.infrastructure.OutboxEventRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,11 +27,12 @@ public class KafkaEventConsumer {
     private final PedidoProjectionHandler pedidoProjectionHandler;
     private final ObjectMapper objectMapper;
     private final PedidoReadModelRepository readModelRepository;
+    private final OutboxEventRepository outboxEventRepository; // ✅ Adicionar esta injeção
 
     @KafkaListener(
             topics = "outbox.public.event_outbox",
             groupId = "query-service-group",
-            containerFactory = "kafkaListenerContainerFactory" // Usa a factory configurada automaticamente
+            containerFactory = "kafkaListenerContainerFactory"
     )
     @Transactional
     public void listen(ConsumerRecord<String, String> record, Acknowledgment ack) {
@@ -38,6 +42,8 @@ public class KafkaEventConsumer {
 
         log.info("📥 Processing message: topic={}, partition={}, offset={}, key={}",
                 record.topic(), partition, offset, messageKey);
+
+        UUID outboxEventId = null;
 
         try {
             if (record.value() == null) {
@@ -49,8 +55,8 @@ public class KafkaEventConsumer {
             JsonNode rootNode = objectMapper.readTree(record.value());
 
             String op = rootNode.get("op").asText();
-            if (!"c".equals(op) && !"u".equals(op)) {
-                log.debug("⏭️ Skipping operation: {}", op);
+            if (!"c".equals(op)) {
+                log.debug("Skipping non-insert operation: {}", op);
                 ack.acknowledge();
                 return;
             }
@@ -62,6 +68,8 @@ public class KafkaEventConsumer {
                 return;
             }
 
+            // EXTRAI outboxEventId para marcar como PROCESSED
+            outboxEventId = UUID.fromString(afterNode.get("id").asText());
             String eventType = afterNode.get("event_type").asText();
             String eventDataRaw = afterNode.get("event_data").asText();
             JsonNode eventData = objectMapper.readTree(eventDataRaw);
@@ -70,14 +78,17 @@ public class KafkaEventConsumer {
             UUID aggregateId = UUID.fromString(eventData.get("aggregateId").asText());
             int eventVersion = eventData.get("version").asInt();
 
-            log.info("🎯 Processing {} event for pedido: {}, version: {}",
-                    eventType, aggregateId, eventVersion);
+            log.info("🎯 Processing {} event for pedido: {}, version: {}, outboxEventId: {}",
+                    eventType, aggregateId, eventVersion, outboxEventId);
 
-            // ⭐⭐ DEDUPLICAÇÃO POR VERSION ⭐⭐
+            // DEDUPLICAÇÃO POR VERSION
             Optional<PedidoReadModel> existingModel = readModelRepository.findById(aggregateId);
             if (existingModel.isPresent() && existingModel.get().getVersion() >= eventVersion) {
                 log.debug("⏭️ Skipping event version {} - current version is {}",
                         eventVersion, existingModel.get().getVersion());
+
+                // Mesmo sendo duplicata, marca como PROCESSED
+                markAsProcessed(outboxEventId);
                 ack.acknowledge();
                 return;
             }
@@ -85,16 +96,33 @@ public class KafkaEventConsumer {
             // Processa o evento
             processEventByType(eventType, eventData);
 
+            // MARCA COMO PROCESSED após processamento bem-sucedido
+            markAsProcessed(outboxEventId);
+
             log.info("✅ Successfully processed {} event for pedido: {}", eventType, aggregateId);
-            ack.acknowledge(); // Confirma o offset apenas se processado com sucesso
+            ack.acknowledge();
 
         } catch (Exception e) {
-            log.error("💥 ERROR processing message - partition: {}, offset: {}, key: {}",
-                    partition, offset, messageKey, e);
+            log.error("💥 ERROR processing message - partition: {}, offset: {}, key: {}, outboxEventId: {}",
+                    partition, offset, messageKey, outboxEventId, e);
 
-            // ⭐⭐ IMPORTANTE: Não faz acknowledge → Spring Kafka fará retry automático ⭐⭐
-            // Após 3 tentativas (configurado no application.yml), será enviado para DLT automaticamente
+            // IMPORTANTE: Não faz acknowledge → Spring Kafka fará retry automático
             throw new RuntimeException("Failed to process Kafka message", e);
+        }
+    }
+
+    // MÉTODO PARA MARCAR COMO PROCESSED
+    private void markAsProcessed(UUID outboxEventId) {
+        try {
+            outboxEventRepository.updateStatus(
+                    outboxEventId,
+                    OutboxEventEntity.OutboxStatus.PROCESSED,
+                    Instant.now()
+            );
+            log.debug("✅ Evento {} marcado como PROCESSED", outboxEventId);
+        } catch (Exception e) {
+            log.error("❌ Erro ao marcar evento {} como PROCESSED", outboxEventId, e);
+            // Não lança exception para não afetar o processamento principal
         }
     }
 
@@ -132,24 +160,52 @@ public class KafkaEventConsumer {
         }
     }
 
-    // ⭐⭐ METODO OPICIONAL: Listener para a Dead Letter Topic ⭐⭐
+    // Listener para Dead Letter Topic
     @KafkaListener(
-            topics = "outbox.public.event_outbox.DLT", // Nome automático do DLT
+            topics = "outbox.public.event_outbox.DLT",
             groupId = "query-service-group-dlt"
     )
     public void listenDlt(ConsumerRecord<String, String> record) {
         log.error("💀 DLT MESSAGE RECEIVED - Topic: {}, Partition: {}, Offset: {}, Key: {}",
                 record.topic(), record.partition(), record.offset(), record.key());
 
-        log.error("💀 DLT Message - Key: {}, Error: {}", record.key(), record.value());
+        // Tenta extrair outboxEventId da mensagem DLT para marcar como FAILED
+        try {
+            JsonNode rootNode = objectMapper.readTree(record.value());
+            JsonNode afterNode = rootNode.get("after");
+            if (afterNode != null && !afterNode.isNull()) {
+                UUID outboxEventId = UUID.fromString(afterNode.get("id").asText());
+                markAsFailed(outboxEventId, "DLT: " + record.value());
+            }
+        } catch (Exception e) {
+            log.error("💀 Error processing DLT message", e);
+        }
+    }
 
+    // MÉTODO PARA MARCAR COMO FAILED (para DLT)
+    private void markAsFailed(UUID outboxEventId, String errorMessage) {
+        try {
+            // Use o método updateStatus se existir
+            outboxEventRepository.updateStatus(
+                    outboxEventId,
+                    OutboxEventEntity.OutboxStatus.FAILED,
+                    Instant.now()
+            );
+            log.error("💀 Evento {} marcado como FAILED: {}", outboxEventId, errorMessage);
+        } catch (Exception e) {
+            log.error("Erro ao marcar evento {} como FAILED", outboxEventId, e);
 
-        // Aqui você pode:
-        // 1. Logar em um sistema de monitoramento
-        // 2. Enviar alerta por email/Slack
-        // 3. Salvar em um banco de eventos problemáticos
-        // 4. Tentar reprocessamento manual
-
-        // ⭐⭐ IMPORTANTE: Não throw exception aqui para não criar loop infinito ⭐⭐
+            // Fallback: use findById + save se updateStatus não funcionar
+            try {
+                outboxEventRepository.findById(outboxEventId).ifPresent(outboxEvent -> {
+                    outboxEvent.setStatus(OutboxEventEntity.OutboxStatus.FAILED);
+                    outboxEvent.setProcessedAt(Instant.now());
+                    outboxEventRepository.save(outboxEvent);
+                    log.error("Evento {} marcado como FAILED (fallback)", outboxEventId);
+                });
+            } catch (Exception ex) {
+                log.error("Erro total ao marcar evento como FAILED", ex);
+            }
+        }
     }
 }
