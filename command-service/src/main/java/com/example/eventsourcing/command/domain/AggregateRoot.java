@@ -1,4 +1,4 @@
-package com.example.eventsourcing.domain;
+package com.example.eventsourcing.command.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Getter;
@@ -56,7 +56,9 @@ public abstract class AggregateRoot {
     }
 
     public String getAggregateType() {
-        return this.getClass().getSimpleName();
+        //return this.getClass().getSimpleName();
+        return this.getClass().getName();
+
     }
     // cada agregado precisa implementar sua própria re-hidratação
     public abstract void loadFromHistory(List<Event> events);

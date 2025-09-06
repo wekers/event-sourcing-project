@@ -1,4 +1,4 @@
-package com.example.eventsourcing.infrastructure;
+package com.example.eventsourcing.command.infrastructure;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -27,7 +28,15 @@ public interface EventStoreRepository extends JpaRepository<EventStoreEntity, Lo
      */
     @Query("SELECT MAX(e.version) FROM EventStoreEntity e WHERE e.aggregateId = :aggregateId")
     Long findMaxVersionByAggregateId(@Param("aggregateId") UUID aggregateId);
-    
+
+
+    @Query("SELECT DISTINCT e.aggregateId FROM EventStoreEntity e")
+    List<UUID> findDistinctAggregateIds();
+
+    @Query("select e.aggregateType from EventStoreEntity e where e.aggregateId = :aggregateId order by e.version asc limit 1")
+    Optional<String> findAggregateType(UUID aggregateId);
+
+
     /**
      * Verifica se existe um evento com a versão específica para o agregado
      */
@@ -42,5 +51,12 @@ public interface EventStoreRepository extends JpaRepository<EventStoreEntity, Lo
      * Busca eventos por tipo de evento
      */
     List<EventStoreEntity> findByEventTypeOrderByCreatedAtAsc(String eventType);
+
+
+    boolean existsByAggregateId(UUID aggregateId);
+
+    // 🔑 Mapeia um outboxId -> aggregateId
+    @Query("SELECT e.aggregateId FROM EventStoreEntity e WHERE e.id = :outboxId")
+    Optional<UUID> findAggregateIdByOutboxId(@Param("outboxId") UUID outboxId);
 }
 

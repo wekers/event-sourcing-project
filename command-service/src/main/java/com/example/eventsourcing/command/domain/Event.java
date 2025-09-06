@@ -1,6 +1,6 @@
-package com.example.eventsourcing.domain;
+package com.example.eventsourcing.command.domain;
 
-import com.example.eventsourcing.domain.pedido.events.*;
+import com.example.eventsourcing.command.domain.pedido.events.*;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
@@ -11,13 +11,13 @@ import java.util.UUID;
 /**
  * Interface base para todos os eventos do sistema
  */
-//@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, property = "@class") //aparece o nome da classe no JSON
+@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, property = "@class") //aparece o nome da classe no JSON
 
-@JsonTypeInfo(
+/*@JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,       // Usa apenas o "nome" e não o FQN
         include = JsonTypeInfo.As.PROPERTY,
         property = "eventType"            // Nome do campo no JSON
-)
+)*/
 @JsonSubTypes({
         @JsonSubTypes.Type(value = PedidoCriado.class, name = "PedidoCriado"),
         @JsonSubTypes.Type(value = PedidoConfirmado.class, name = "PedidoConfirmado"),

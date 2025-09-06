@@ -1,8 +1,8 @@
-package com.example.eventsourcing.domain.pedido.events;
+package com.example.eventsourcing.command.domain.pedido.events;
 
-import com.example.eventsourcing.domain.Event;
-import com.example.eventsourcing.domain.pedido.Pedido;
-import com.example.eventsourcing.domain.pedido.StatusPedido;
+import com.example.eventsourcing.command.domain.Event;
+import com.example.eventsourcing.command.domain.pedido.Pedido;
+import com.example.eventsourcing.command.domain.pedido.StatusPedido;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -33,12 +33,14 @@ public sealed interface PedidoEvent extends Event
 
     @Override
     default String getEventType() {
+        //return this.getClass().getName();
         return this.getClass().getSimpleName();
     }
 
     @Override
     default String getAggregateType() {
-        return "Pedido"; // Tipo fixo para eventos de Pedido
+        //return "Pedido"; // Tipo fixo para eventos de Pedido
+        return com.example.eventsourcing.command.domain.pedido.Pedido.class.getName();
     }
 
     @Override

@@ -1,7 +1,7 @@
-package com.example.eventsourcing.infrastructure;
+package com.example.eventsourcing.command.infrastructure;
 
-import com.example.eventsourcing.domain.AggregateRoot;
-import com.example.eventsourcing.domain.Event;
+import com.example.eventsourcing.command.domain.AggregateRoot;
+import com.example.eventsourcing.command.domain.Event;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -72,7 +73,7 @@ public class EventStore {
                 .map(entity -> {
                     try {
                         // Reconstitui o evento a partir dos dados e do tipo
-                        Class<?> eventClass = Class.forName("com.example.eventsourcing.domain.pedido.events." + entity.getEventType());
+                        Class<?> eventClass = Class.forName("com.example.eventsourcing.command.domain.pedido.events." + entity.getEventType());
                         return (Event) objectMapper.convertValue(entity.getEventData(), eventClass);
                     } catch (ClassNotFoundException e) {
                         log.error("Event class not found: {}", entity.getEventType(), e);
@@ -90,5 +91,56 @@ public class EventStore {
         Long version = eventStoreRepository.findMaxVersionByAggregateId(aggregateId);
         return version != null ? version : 0L;
     }
+
+    @Transactional(readOnly = true)
+    public List<Event> getEvents(UUID aggregateId) {
+        List<EventStoreEntity> entities =
+                eventStoreRepository.findByAggregateIdOrderByVersionAsc(aggregateId);
+
+        return entities.stream()
+                .map(entity -> {
+                    try {
+                        Class<?> eventClass = Class.forName(
+                                "com.example.eventsourcing.command.domain.pedido.events." + entity.getEventType()
+                        );
+                        return (Event) objectMapper.convertValue(entity.getEventData(), eventClass);
+                    } catch (ClassNotFoundException e) {
+                        log.error("Event class not found: {}", entity.getEventType(), e);
+                        throw new RuntimeException("Failed to load event", e);
+                    }
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Obtém todos os aggregateIds distintos no Event Store.
+     */
+    @Transactional(readOnly = true)
+    public List<UUID> getAllAggregateIds() {
+        return eventStoreRepository.findDistinctAggregateIds();
+    }
+
+    public Optional<String> getAggregateType(UUID aggregateId) {
+        return eventStoreRepository.findAggregateType(aggregateId);
+    }
+
+    /**
+     * Verifica se um aggregateId existe no Event Store
+     */
+    @Transactional(readOnly = true)
+    public boolean existsAggregateId(UUID aggregateId) {
+        return eventStoreRepository.existsByAggregateId(aggregateId);
+    }
+
+    /**
+     * Resolve aggregateId a partir de um outboxId (se existir relação).
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> findAggregateIdByOutboxId(UUID outboxId) {
+        return eventStoreRepository.findAggregateIdByOutboxId(outboxId);
+    }
+
+
 }
+
 
