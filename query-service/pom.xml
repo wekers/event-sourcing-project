@@ -7,7 +7,7 @@
         <version>3.2.0</version>
         <relativePath/>
     </parent>
-    <groupId>com.examplo</groupId>
+    <groupId>com.exemplo</groupId>
     <artifactId>query-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>query-service</name>
@@ -35,6 +35,12 @@
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+
+
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -88,7 +94,7 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.example</groupId>
+            <groupId>com.exemplo</groupId>
             <artifactId>event-sourcing-project</artifactId>
             <version>0.0.1-SNAPSHOT</version>
             <scope>compile</scope>

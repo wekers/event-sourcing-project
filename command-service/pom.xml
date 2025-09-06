@@ -6,8 +6,9 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>3.2.0</version>
+        <relativePath/>
     </parent>
-    <groupId>com.example</groupId>
+    <groupId>com.exemplo</groupId>
     <artifactId>event-sourcing-project</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>event-sourcing-project</name>
@@ -101,6 +102,10 @@
         <groupId>com.exemplo</groupId>
         <artifactId>event-contracts</artifactId>
         <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webflux</artifactId>
         </dependency>
     </dependencies>
 
