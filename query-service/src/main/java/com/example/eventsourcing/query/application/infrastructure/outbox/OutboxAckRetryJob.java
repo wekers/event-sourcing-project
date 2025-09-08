@@ -18,10 +18,10 @@ public class OutboxAckRetryJob {
     private final OutboxPendingAckRepository pendingAckRepository;
     private final OutboxClient outboxClient;
 
-    private static final int MAX_RETRIES = 100; // limite de tentativas
+    //private static final int MAX_RETRIES = 100; // limite de tentativas
     private static final Duration ACK_TTL = Duration.ofDays(7); // expira ACKs muito antigos
 
-    @Scheduled(fixedDelay = 10000) // a cada 10s
+    @Scheduled(fixedDelay = 30000) // a cada 30s
     public void retryPendingAcks() {
         var pendencias = pendingAckRepository.findAll();
 
@@ -44,12 +44,12 @@ public class OutboxAckRetryJob {
                 }
 
                 // Verifica limite de tentativas
-                if (pending.getRetryCount() >= MAX_RETRIES) {
+              /*  if (pending.getRetryCount() >= MAX_RETRIES) {
                     log.error("❌ ACK excedeu limite de {} tentativas para {}",
                             MAX_RETRIES, pending.getOutboxEventId());
                     descartados.add(pending);
                     continue;
-                }
+                }*/
 
                 // Reenvia
                 outboxClient.markAsProcessed(pending.getOutboxEventId());
