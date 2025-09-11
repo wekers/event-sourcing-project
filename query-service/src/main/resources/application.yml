@@ -7,16 +7,22 @@ spring:
     username: postgres
     password: pass
     driver-class-name: org.postgresql.Driver
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-  flyway:
-    #url: jdbc:postgresql://postgres:5432/eventstore
-    url: jdbc:postgresql://localhost:5435/eventstore
-    user: postgres
-    password: pass
-    locations: classpath:db/migration
+  #jpa:
+    #hibernate:
+      #ddl-auto: update
+    #show-sql: true
+  data:
+    mongodb:
+      uri: mongodb://user:pass@localhost:27018/pedido_read_db?authSource=pedido_read_db
+      database: pedido_read_db
+
+
+  #flyway:
+    ##url: jdbc:postgresql://postgres:5432/eventstore
+    #url: jdbc:postgresql://localhost:5435/eventstore
+    #user: postgres
+    #password: pass
+    #locations: classpath:db/migration
   kafka:
     bootstrap-servers: localhost:9092
     #bootstrap-servers: kafka:9092
@@ -52,7 +58,7 @@ logging:
     #org.springframework.kafka: DEBUG
     #com.example.eventsourcing.application.projection: TRACE
     com.example.eventsourcing: DEBUG
-    org.hibernate.SQL: INFO
-    org.hibernate.type.descriptor.sql.BasicBinder: INFO
+    #org.hibernate.SQL: INFO
+    #org.hibernate.type.descriptor.sql.BasicBinder: INFO
 
 

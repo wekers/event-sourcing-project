@@ -1,7 +1,5 @@
 package com.example.eventsourcing.query.application.readmodel;
 
-import com.example.eventsourcing.command.domain.pedido.StatusPedido;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -11,7 +9,7 @@ public record PedidoDTO(
         String numeroPedido,
         String clienteNome,
         String clienteEmail,
-        StatusPedido status,
+        String status,
         BigDecimal valorTotal,
         Instant dataCriacao,
         Instant dataAtualizacao

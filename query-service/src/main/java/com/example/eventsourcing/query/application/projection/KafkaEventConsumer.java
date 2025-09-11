@@ -69,7 +69,16 @@ public class KafkaEventConsumer {
                     outboxClient.markAsProcessed(outboxEventId);
                 } catch (Exception ex) {
                     log.warn("⚠️ Command-service offline (dup), salvando pendência {}", outboxEventId);
-                    pendingAckRepository.save(new OutboxPendingAck(outboxEventId));
+                    UUID finalOutboxEventId = outboxEventId;
+                    pendingAckRepository.findByOutboxEventId(outboxEventId)
+                            .ifPresentOrElse(
+                                    existing -> {
+                                        existing.incrementRetryCount();
+                                        pendingAckRepository.save(existing); // atualiza o retryCount
+                                    },
+                                    () -> pendingAckRepository.save(new OutboxPendingAck(finalOutboxEventId)) // primeira vez
+                            );
+
                 }
                 ack.acknowledge();
                 return;

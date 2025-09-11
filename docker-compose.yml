@@ -108,9 +108,21 @@ services:
 #      - kafka
 #    networks:
 #      - event-sourcing-network
+  mongo:
+    image: mongo:6.0
+    container_name: mongo
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+      MONGO_INITDB_DATABASE: pedido_read_db
+    volumes:
+      - ./docker/mongo-init:/docker-entrypoint-initdb.d
 
 volumes:
   postgres_data:
+  mongo_data:
 
 networks:
   event-sourcing-network:

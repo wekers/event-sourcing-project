@@ -58,7 +58,7 @@ public class PedidoQueryController {
         return ResponseEntity.ok(queryService.findByPeriodo(inicio, fim, pageable));
     }
 
-    @GetMapping("/search")
+   /* @GetMapping("/search")
     public ResponseEntity<Page<PedidoDTO>> buscarPedidos(
             @RequestParam(required = false) UUID clienteId,
             @RequestParam(required = false) StatusPedido status,
@@ -66,7 +66,7 @@ public class PedidoQueryController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant fim,
             Pageable pageable) {
         return ResponseEntity.ok(queryService.search(clienteId, status, inicio, fim, pageable));
-    }
+    }*/
 
     @GetMapping("/{pedidoId}/completo")
     public ResponseEntity<PedidoCompletoDTO> buscarPedidoCompleto(@PathVariable UUID pedidoId) {
@@ -101,7 +101,7 @@ public class PedidoQueryController {
     }
 
     @GetMapping("/estatisticas/cliente/{clienteId}/total-gasto")
-    public ResponseEntity<BigDecimal> getTotalGastoPorCliente(@PathVariable UUID clienteId) {
+    public ResponseEntity<Double> getTotalGastoPorCliente(@PathVariable UUID clienteId) {
         return ResponseEntity.ok(queryService.getTotalGastoPorCliente(clienteId));
     }
 }

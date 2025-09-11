@@ -33,17 +33,25 @@ public class PedidoProjectionHandler {
             readModel.setClienteId(evento.clienteId());
             readModel.setClienteNome(evento.clienteNome());
             readModel.setClienteEmail(evento.clienteEmail());
-            readModel.setStatus(evento.status()); // Usa o status do evento
+            readModel.setStatus(evento.status().name()); // Usa o status do evento
             readModel.setValorTotal(evento.valorTotal());
             readModel.setDataCriacao(evento.timestamp());
             readModel.setDataAtualizacao(evento.timestamp());
             List<ItemPedido> itensReadModel = evento.itens().stream()
-                    .map(itemEvent -> ItemPedido.from(itemEvent))
+                    .map(itemEvent -> ItemPedido.from(
+                            itemEvent.getProdutoId(),
+                            itemEvent.getProdutoNome(),
+                            itemEvent.getProdutoDescricao(),
+                            itemEvent.getQuantidade(),
+                            itemEvent.getPrecoUnitario(),
+                            itemEvent.getValorTotal()
+                    ))
                     .collect(Collectors.toList());
 
             readModel.setItens(itensReadModel);
             // Converter o endereço
-            readModel.setEnderecoEntrega(convertEndereco(evento.enderecoEntrega()));            readModel.setVersion(evento.version());
+            readModel.setEnderecoEntrega(convertEndereco(evento.enderecoEntrega()));
+            readModel.setVersion(evento.version());
 
             readModelRepository.save(readModel);
 
@@ -84,7 +92,14 @@ public class PedidoProjectionHandler {
                 PedidoReadModel readModel = readModelOpt.get();
                 // Converter os itens
                 List<ItemPedido> itensReadModel = evento.itens().stream()
-                        .map(itemEvent -> ItemPedido.from(itemEvent))
+                        .map(itemEvent -> ItemPedido.from(
+                                itemEvent.getProdutoId(),
+                                itemEvent.getProdutoNome(),
+                                itemEvent.getProdutoDescricao(),
+                                itemEvent.getQuantidade(),
+                                itemEvent.getPrecoUnitario(),
+                                itemEvent.getValorTotal()
+                        ))
                         .collect(Collectors.toList());
 
                 readModel.setItens(itensReadModel);
@@ -95,7 +110,7 @@ public class PedidoProjectionHandler {
                 readModel.setObservacoes(evento.observacoes());
                 readModel.setDataAtualizacao(evento.timestamp());
                 readModel.setVersion(evento.version());
-                readModel.setStatus(evento.currentStatus()); // Mantém o status atual do agregado
+                readModel.setStatus(evento.currentStatus().name()); // Mantém o status atual do agregado
 
                 readModelRepository.save(readModel);
 
@@ -117,7 +132,7 @@ public class PedidoProjectionHandler {
 
             if (readModelOpt.isPresent()) {
                 PedidoReadModel readModel = readModelOpt.get();
-                readModel.setStatus(evento.status()); // Usa o status do evento
+                readModel.setStatus(evento.status().name()); // Usa o status do evento
                 readModel.setDataCancelamento(evento.timestamp());
                 readModel.setDataAtualizacao(evento.timestamp());
                 readModel.setObservacoes(evento.motivo());
@@ -143,7 +158,7 @@ public class PedidoProjectionHandler {
 
             if (readModelOpt.isPresent()) {
                 PedidoReadModel readModel = readModelOpt.get();
-                readModel.setStatus(evento.status());
+                readModel.setStatus(evento.status().name());
                 readModel.setDataAtualizacao(evento.timestamp());
                 readModel.setVersion(evento.version());
 
@@ -167,7 +182,7 @@ public class PedidoProjectionHandler {
 
             if (readModelOpt.isPresent()) {
                 PedidoReadModel readModel = readModelOpt.get();
-                readModel.setStatus(evento.status());
+                readModel.setStatus(evento.status().name());
                 readModel.setDataAtualizacao(evento.timestamp());
                 readModel.setVersion(evento.version());
 
@@ -191,7 +206,7 @@ public class PedidoProjectionHandler {
 
             if (readModelOpt.isPresent()) {
                 PedidoReadModel readModel = readModelOpt.get();
-                readModel.setStatus(evento.status());
+                readModel.setStatus(evento.status().name());
                 readModel.setDataAtualizacao(evento.timestamp());
                 readModel.setVersion(evento.version());
 
@@ -215,7 +230,7 @@ public class PedidoProjectionHandler {
 
             if (readModelOpt.isPresent()) {
                 PedidoReadModel readModel = readModelOpt.get();
-                readModel.setStatus(evento.status());
+                readModel.setStatus(evento.status().name());
                 readModel.setDataAtualizacao(evento.timestamp());
                 readModel.setVersion(evento.version());
 

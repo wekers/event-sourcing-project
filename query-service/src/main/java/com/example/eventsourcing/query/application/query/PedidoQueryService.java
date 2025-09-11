@@ -12,7 +12,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,7 +45,7 @@ public class PedidoQueryService {
 
     public Page<PedidoDTO> findByStatus(StatusPedido status, Pageable pageable) {
         log.debug("Buscando pedidos por status: {}", status);
-        return readModelRepository.findByStatusOrderByDataCriacaoDesc(status, pageable)
+        return readModelRepository.findByStatusOrderByDataCriacaoDesc(String.valueOf(status), pageable)
                 .map(PedidoDTO::from);
     }
 
@@ -56,13 +55,13 @@ public class PedidoQueryService {
                 .map(PedidoDTO::from);
     }
 
-    public Page<PedidoDTO> search(UUID clienteId, StatusPedido status, Instant inicio, Instant fim, Pageable pageable) {
+    /*public Page<PedidoDTO> search(UUID clienteId, StatusPedido status, Instant inicio, Instant fim, Pageable pageable) {
         log.debug("Buscando pedidos com filtros - cliente: {}, status: {}, inicio: {}, fim: {}",
                 clienteId, status, inicio, fim);
 
         return readModelRepository.search(clienteId, status, inicio, fim, pageable)
                 .map(PedidoDTO::from);
-    }
+    }*/
 
     public Page<PedidoDTO> findAll(Pageable pageable) {
         log.debug("Buscando todos os pedidos com paginação");
@@ -89,7 +88,7 @@ public class PedidoQueryService {
                 .clienteId(readModel.getClienteId())
                 .clienteNome(readModel.getClienteNome())
                 .clienteEmail(readModel.getClienteEmail())
-                .status(readModel.getStatus())
+                .status(StatusPedido.valueOf(readModel.getStatus()))
                 .valorTotal(readModel.getValorTotal())
                 .dataCriacao(readModel.getDataCriacao())
                 .dataAtualizacao(readModel.getDataAtualizacao())
@@ -123,14 +122,14 @@ public class PedidoQueryService {
 
     // Métodos adicionais para estatísticas
     public long countByStatus(StatusPedido status) {
-        return readModelRepository.countByStatus(status);
+        return readModelRepository.countByStatus(String.valueOf(status));
     }
 
     public long countByClienteId(UUID clienteId) {
         return readModelRepository.countByClienteId(clienteId);
     }
 
-    public BigDecimal getTotalGastoPorCliente(UUID clienteId) {
+    public Double getTotalGastoPorCliente(UUID clienteId) {
         return readModelRepository.sumValorTotalByClienteId(clienteId);
     }
 }

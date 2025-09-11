@@ -1,14 +1,16 @@
 package com.example.eventsourcing.query.application.infrastructure.outbox;
 
 
-import jakarta.persistence.*;
+
 import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 import java.util.UUID;
 
-
-@Entity
+@Document(collection = "outbox_pending_ack")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -16,16 +18,12 @@ import java.util.UUID;
 public class OutboxPendingAck {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // casa com "IDENTITY" do Flyway
-    private Long id;
+    private String id; // Mongo usa String/ObjectId como chave
 
-    @Column(name = "outbox_event_id", nullable = false, columnDefinition = "UUID")
+    @Indexed(unique = true) // garante que só pode haver 1 por outboxEventId
     private UUID outboxEventId;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
-
-    @Column(name = "retry_count", nullable = false)
     private int retryCount = 0;
 
     public OutboxPendingAck(UUID outboxEventId) {

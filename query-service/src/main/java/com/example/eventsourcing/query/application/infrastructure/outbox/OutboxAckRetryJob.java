@@ -67,10 +67,10 @@ public class OutboxAckRetryJob {
 
         // Deleta os que foram confirmados ou descartados
         if (!processados.isEmpty()) {
-            pendingAckRepository.deleteAllInBatch(processados);
+            pendingAckRepository.deleteAll(processados);
         }
         if (!descartados.isEmpty()) {
-            pendingAckRepository.deleteAllInBatch(descartados);
+            pendingAckRepository.deleteAll(descartados);
         }
     }
 }
