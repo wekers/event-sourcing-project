@@ -1,18 +1,23 @@
 package com.example.eventsourcing.query.application.query;
 
-import com.example.eventsourcing.command.domain.pedido.StatusPedido;
 import com.example.eventsourcing.query.application.PedidoReadModelRepository;
 import com.example.eventsourcing.query.application.readmodel.PedidoCompletoDTO;
 import com.example.eventsourcing.query.application.readmodel.PedidoDTO;
 import com.example.eventsourcing.query.application.readmodel.PedidoReadModel;
+import com.example.eventsourcing.query.application.readmodel.StatusPedido;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
+import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -24,6 +29,7 @@ import java.util.stream.Collectors;
 public class PedidoQueryService {
 
     private final PedidoReadModelRepository readModelRepository;
+    private final MongoTemplate mongoTemplate;
 
     public Optional<PedidoDTO> findById(UUID pedidoId) {
         log.debug("Buscando pedido por ID: {}", pedidoId);
@@ -88,7 +94,7 @@ public class PedidoQueryService {
                 .clienteId(readModel.getClienteId())
                 .clienteNome(readModel.getClienteNome())
                 .clienteEmail(readModel.getClienteEmail())
-                .status(StatusPedido.valueOf(readModel.getStatus()))
+                .status(readModel.getStatus()) // 👈 já é StatusPedido
                 .valorTotal(readModel.getValorTotal())
                 .dataCriacao(readModel.getDataCriacao())
                 .dataAtualizacao(readModel.getDataAtualizacao())
@@ -106,18 +112,20 @@ public class PedidoQueryService {
                         .collect(Collectors.toList()))
                 .enderecoEntrega(readModel.getEnderecoEntrega() != null ?
                         PedidoCompletoDTO.EnderecoEntregaDTO.builder()
-                                .logradouro(readModel.getEnderecoEntrega().getLogradouro())
-                                .numero(readModel.getEnderecoEntrega().getNumero())
-                                .complemento(readModel.getEnderecoEntrega().getComplemento())
-                                .bairro(readModel.getEnderecoEntrega().getBairro())
-                                .cidade(readModel.getEnderecoEntrega().getCidade())
-                                .estado(readModel.getEnderecoEntrega().getEstado())
-                                .cep(readModel.getEnderecoEntrega().getCep())
-                                .pontoReferencia(readModel.getEnderecoEntrega().getPontoReferencia())
-                                .build() : null)
+                                .logradouro(readModel.getEnderecoEntrega().logradouro())
+                                .numero(readModel.getEnderecoEntrega().numero())
+                                .complemento(readModel.getEnderecoEntrega().complemento())
+                                .bairro(readModel.getEnderecoEntrega().bairro())
+                                .cidade(readModel.getEnderecoEntrega().cidade())
+                                .estado(readModel.getEnderecoEntrega().estado())
+                                .cep(readModel.getEnderecoEntrega().cep())
+                                .pontoReferencia(readModel.getEnderecoEntrega().pontoReferencia())
+                                .build()
+                        : null)
                 .version(readModel.getVersion())
                 .build();
     }
+
 
 
     // Métodos adicionais para estatísticas
@@ -130,6 +138,20 @@ public class PedidoQueryService {
     }
 
     public Double getTotalGastoPorCliente(UUID clienteId) {
-        return readModelRepository.sumValorTotalByClienteId(clienteId);
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(Criteria.where("cliente_id").is(clienteId)), // ← cliente_id
+                Aggregation.group().sum("valor_total").as("total") // ← valor_total
+        );
+
+        AggregationResults<Map> results = mongoTemplate.aggregate(
+                aggregation, "pedido_read", Map.class
+        );
+
+        if (results.getMappedResults().isEmpty()) {
+            return 0.0;
+        }
+
+        Map<String, Object> result = results.getMappedResults().get(0);
+        return result.get("total") != null ? ((Number) result.get("total")).doubleValue() : 0.0;
     }
 }

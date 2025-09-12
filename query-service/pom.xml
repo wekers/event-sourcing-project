@@ -56,13 +56,6 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Contracts -->
-        <dependency>
-            <groupId>com.exemplo</groupId>
-            <artifactId>event-contracts</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-        </dependency>
-
         <!-- Testes -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -83,12 +76,6 @@
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.exemplo</groupId>
-            <artifactId>event-sourcing-project</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-            <scope>compile</scope>
         </dependency>
     </dependencies>
 

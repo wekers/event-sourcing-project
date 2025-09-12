@@ -1,6 +1,5 @@
 package com.example.eventsourcing.query.application.readmodel;
 
-import com.example.eventsourcing.command.domain.pedido.StatusPedido;
 import lombok.Builder;
 import lombok.Data;
 

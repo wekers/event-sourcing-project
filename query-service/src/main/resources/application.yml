@@ -1,31 +1,19 @@
 spring:
   application:
     name: query-service
-  datasource:
-    #url: jdbc:postgresql://postgres:5432/eventstore
-    url: jdbc:postgresql://localhost:5435/eventstore
-    username: postgres
-    password: pass
-    driver-class-name: org.postgresql.Driver
-  #jpa:
-    #hibernate:
-      #ddl-auto: update
-    #show-sql: true
+
   data:
     mongodb:
       uri: mongodb://user:pass@localhost:27018/pedido_read_db?authSource=pedido_read_db
       database: pedido_read_db
+      uuid-representation: standard
+      field-naming-strategy: org.springframework.data.mapping.model.SnakeCaseFieldNamingStrategy
+    jackson:
+      deserialization:
+        use-big-decimal-for-floats: true
 
-
-  #flyway:
-    ##url: jdbc:postgresql://postgres:5432/eventstore
-    #url: jdbc:postgresql://localhost:5435/eventstore
-    #user: postgres
-    #password: pass
-    #locations: classpath:db/migration
   kafka:
     bootstrap-servers: localhost:9092
-    #bootstrap-servers: kafka:9092
     consumer:
       group-id: query-service-group
       auto-offset-reset: earliest
@@ -33,32 +21,25 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       properties:
-        isolation.level: read_committed  # ✅ Importante para transações
-        max.poll.records: 50             # ✅ Número de mensagens por poll
+        isolation.level: read_committed   # ✅ Importante para transações
+        max.poll.records: 50              # ✅ Número de mensagens por poll
     listener:
-      ack-mode: MANUAL                   # ✅ Melhor que RECORD para controle preciso
-      concurrency: 3                     # ✅ 3 threads consumidoras
-      poll-timeout: 5000                 # ✅ Timeout de poll em ms
-
+      ack-mode: MANUAL                    # ✅ Melhor que RECORD para controle preciso
+      concurrency: 3                      # ✅ 3 threads consumidoras
+      poll-timeout: 5000                  # ✅ Timeout de poll em ms
     retry:
       topic:
         enabled: true
-        # retry.topic.enabled: true cria automaticamente o retry topic e o DLT topic (outbox.public.event_outbox.DLT).
-        attempts: 3        # número de tentativas antes de enviar ao DLT
-        delay: 2s          # tempo entre tentativas
-        multiplier: 2.0                  # ✅ Backoff exponencial
-        max-delay: 10s                   # ✅ Delay máximo
+        attempts: 3
+        delay: 2s
+        multiplier: 2.0                   # ✅ Backoff exponencial
+        max-delay: 10s
+
 server:
   port: 8081
-  #servlet:
-    #context-path: /api
 
 logging:
   level:
-    #org.springframework.kafka: DEBUG
-    #com.example.eventsourcing.application.projection: TRACE
     com.example.eventsourcing: DEBUG
     #org.hibernate.SQL: INFO
     #org.hibernate.type.descriptor.sql.BasicBinder: INFO
-
-

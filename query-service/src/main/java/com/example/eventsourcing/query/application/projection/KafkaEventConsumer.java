@@ -1,7 +1,7 @@
 package com.example.eventsourcing.query.application.projection;
 
-import com.example.eventsourcing.command.domain.pedido.events.*;
 import com.example.eventsourcing.query.application.PedidoReadModelRepository;
+import com.example.eventsourcing.query.application.events.*;
 import com.example.eventsourcing.query.application.infrastructure.outbox.OutboxClient;
 import com.example.eventsourcing.query.application.infrastructure.outbox.OutboxPendingAck;
 import com.example.eventsourcing.query.application.infrastructure.outbox.OutboxPendingAckRepository;
@@ -26,7 +26,7 @@ public class KafkaEventConsumer {
     private final ObjectMapper objectMapper;
     private final PedidoReadModelRepository readModelRepository;
     private final OutboxClient outboxClient;
-    private final OutboxPendingAckRepository pendingAckRepository;
+    private final OutboxPendingAckRepository pendingAckRepository; // ✅ novo
 
     @KafkaListener(
             topics = "outbox.public.event_outbox",
@@ -65,62 +65,51 @@ public class KafkaEventConsumer {
             var existingModel = readModelRepository.findById(aggregateId);
             if (existingModel.isPresent() && existingModel.get().getVersion() >= eventVersion) {
                 log.debug("⏭️ Ignorando versão duplicada {}", eventVersion);
-                try {
-                    outboxClient.markAsProcessed(outboxEventId);
-                } catch (Exception ex) {
-                    log.warn("⚠️ Command-service offline (dup), salvando pendência {}", outboxEventId);
-                    UUID finalOutboxEventId = outboxEventId;
-                    pendingAckRepository.findByOutboxEventId(outboxEventId)
-                            .ifPresentOrElse(
-                                    existing -> {
-                                        existing.incrementRetryCount();
-                                        pendingAckRepository.save(existing); // atualiza o retryCount
-                                    },
-                                    () -> pendingAckRepository.save(new OutboxPendingAck(finalOutboxEventId)) // primeira vez
-                            );
-
-                }
+                tryMarkAsProcessedOrSave(outboxEventId);
                 ack.acknowledge();
                 return;
             }
 
-            // processa evento
+            // processa evento → cria/atualiza o read model
             processEventByType(eventType, eventData);
 
-            // tenta avisar command-service que foi processado
-            try {
-                outboxClient.markAsProcessed(outboxEventId);
-            } catch (Exception ex) {
-                log.warn("⚠️ Command-service offline, salvando pendência {}", outboxEventId);
-                pendingAckRepository.save(new OutboxPendingAck(outboxEventId));
-            }
+            // tenta avisar o command-service
+            tryMarkAsProcessedOrSave(outboxEventId);
 
-            // confirma para Kafka (não vamos reprocessar indefinidamente)
             ack.acknowledge();
-
         } catch (Exception e) {
             log.error("💥 ERRO ao processar Kafka msg, outboxId={}", outboxEventId, e);
             throw new RuntimeException("Erro no KafkaEventConsumer", e);
         }
     }
 
+    private void tryMarkAsProcessedOrSave(UUID outboxEventId) {
+        try {
+            outboxClient.markAsProcessed(outboxEventId);
+        } catch (Exception ex) {
+            log.warn("⚠️ Command-service offline, salvando {} em pendingAck", outboxEventId);
+            pendingAckRepository.save(new OutboxPendingAck(outboxEventId));
+        }
+    }
+
     private void processEventByType(String eventType, JsonNode eventData) throws Exception {
         switch (eventType) {
-            case "PedidoCriado" -> pedidoProjectionHandler.handlePedidoCriado(
-                    objectMapper.convertValue(eventData, PedidoCriado.class));
-            case "PedidoAtualizado" -> pedidoProjectionHandler.handlePedidoAtualizado(
-                    objectMapper.convertValue(eventData, PedidoAtualizado.class));
-            case "PedidoCancelado" -> pedidoProjectionHandler.handlePedidoCancelado(
-                    objectMapper.convertValue(eventData, PedidoCancelado.class));
-            case "PedidoConfirmado" -> pedidoProjectionHandler.handlePedidoConfirmado(
-                    objectMapper.convertValue(eventData, PedidoConfirmado.class));
-            case "PedidoEmPreparacao" -> pedidoProjectionHandler.handlePedidoEmPreparacao(
-                    objectMapper.convertValue(eventData, PedidoEmPreparacao.class));
-            case "PedidoEnviado" -> pedidoProjectionHandler.handlePedidoEnviado(
-                    objectMapper.convertValue(eventData, PedidoEnviado.class));
-            case "PedidoEntregue" -> pedidoProjectionHandler.handlePedidoEntregue(
-                    objectMapper.convertValue(eventData, PedidoEntregue.class));
+            case "PedidoCriado" ->
+                    pedidoProjectionHandler.handlePedidoCriado(objectMapper.convertValue(eventData, PedidoCriado.class));
+            case "PedidoAtualizado" ->
+                    pedidoProjectionHandler.handlePedidoAtualizado(objectMapper.convertValue(eventData, PedidoAtualizado.class));
+            case "PedidoCancelado" ->
+                    pedidoProjectionHandler.handlePedidoCancelado(objectMapper.convertValue(eventData, PedidoCancelado.class));
+            case "PedidoConfirmado" ->
+                    pedidoProjectionHandler.handlePedidoConfirmado(objectMapper.convertValue(eventData, PedidoConfirmado.class));
+            case "PedidoEmPreparacao" ->
+                    pedidoProjectionHandler.handlePedidoEmPreparacao(objectMapper.convertValue(eventData, PedidoEmPreparacao.class));
+            case "PedidoEnviado" ->
+                    pedidoProjectionHandler.handlePedidoEnviado(objectMapper.convertValue(eventData, PedidoEnviado.class));
+            case "PedidoEntregue" ->
+                    pedidoProjectionHandler.handlePedidoEntregue(objectMapper.convertValue(eventData, PedidoEntregue.class));
             default -> log.warn("❓ Unknown event type: {}", eventType);
         }
     }
 }
+

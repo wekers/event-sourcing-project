@@ -9,7 +9,6 @@
     <packaging>pom</packaging>
 
     <modules>
-        <module>event-contracts</module>
         <module>command-service</module>
         <module>query-service</module>
     </modules>

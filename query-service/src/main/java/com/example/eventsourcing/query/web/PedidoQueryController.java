@@ -1,9 +1,9 @@
 package com.example.eventsourcing.query.web;
 
-import com.example.eventsourcing.command.domain.pedido.StatusPedido;
 import com.example.eventsourcing.query.application.query.PedidoQueryService;
 import com.example.eventsourcing.query.application.readmodel.PedidoCompletoDTO;
 import com.example.eventsourcing.query.application.readmodel.PedidoDTO;
+import com.example.eventsourcing.query.application.readmodel.StatusPedido;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -11,7 +11,6 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 

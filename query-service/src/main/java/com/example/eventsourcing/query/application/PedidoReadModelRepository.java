@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.Aggregation;
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
@@ -43,14 +44,17 @@ public interface PedidoReadModelRepository extends MongoRepository<PedidoReadMod
 
     // Estatísticas
     long countByStatus(String status);
+    // Método alternativo para debug
+    @Query(value = "{ 'clienteId': ?0 }", count = true)
     long countByClienteId(UUID clienteId);
 
     // Soma total por cliente (Mongo Aggregation)
     @Aggregation(pipeline = {
-            "{ '$match': { 'clienteId': ?0 } }",
-            "{ '$group': { '_id': null, 'total': { '$sum': '$valorTotal' } } }"
+            "{ '$match': { 'cliente_id': ?0 } }", // ← cliente_id em vez de clienteId
+            "{ '$group': { '_id': null, 'total': { '$sum': '$valor_total' } } }" // ← valor_total em vez de valorTotal
     })
     Double sumValorTotalByClienteId(UUID clienteId);
+
 
     // Busca flexível → só com query dinâmica (precisa de implementação custom via MongoTemplate)
 }

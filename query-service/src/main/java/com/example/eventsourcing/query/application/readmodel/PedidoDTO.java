@@ -9,7 +9,7 @@ public record PedidoDTO(
         String numeroPedido,
         String clienteNome,
         String clienteEmail,
-        String status,
+        StatusPedido status,
         BigDecimal valorTotal,
         Instant dataCriacao,
         Instant dataAtualizacao
