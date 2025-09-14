@@ -1,121 +1,154 @@
-# Projeto Spring Boot Event Sourcing (Microserviços)
+# 📦 Event Sourcing Project — Query Service (MongoDB Branch)
 
-Este projeto demonstra uma arquitetura de **Event Sourcing** e **CQRS**
-(Command Query Responsibility Segregation) utilizando **Spring Boot**,
-**PostgreSQL**, **Kafka** e **Debezium**.  
-A aplicação foi refatorada em dois microserviços principais:
-
-- **Command Service**: responsável por receber comandos, persistir
-  eventos no **Event Store**, gerenciar **Snapshots** e publicar eventos via
-  **Outbox Pattern**.
-- **Query Service**: responsável por consumir eventos do Kafka,
-  construir e manter projeções (Read Models) em um banco relacional e
-  servir consultas. Também faz ACK de eventos processados de volta ao
-  `Command Service`.
+Este projeto implementa **DDD + Event Sourcing + CQRS + Outbox Pattern (com CDC via Debezium)** em uma arquitetura baseada em microserviços.  
+Atualmente, o **Query Service** utiliza **MongoDB** como banco de dados para os **Read Models** (antes era PostgreSQL).
 
 ---
 
-## 🚀 Arquitetura
+## ⚙️ Arquitetura
 
-```text
-                       ┌────────────────────────────┐
-                       │   Pedido Command Service   │
-                       │                            │
-    [REST Controller]─>│ PedidoCommandService       │
-                       │            │               │
-                       │            v               │
-                       │       [EventStore]         │
-                       │            │               │
-                       │        [Outbox]            │
-                       │            │               │
-                       └────────────┼───────────────┘
-                                    │
-                                    ▼
-                                [Debezium CDC]
-                                    │
-                                    ▼
-                                 [Kafka]
-                                    │
-                                    ▼
-                       ┌────────────────────────────┐
-                       │    Pedido Query Service    │
-                       │                            │
-                       │ KafkaEventConsumer         │
-                       │            │               │
-                       │            ▼               │
-                       │   [PedidoReadModel DB]     │
-                       │                            │
-                       │ OutboxAckRetryJob (ACKs)   │
-                       └────────────────────────────┘
-```
+### 1. **Command Service**
+- Persiste os eventos no **Event Store** (PostgreSQL).
+- Registra os eventos na tabela **Outbox** (`event_outbox`).
+- Gera snapshots dos agregados em `snapshot_store`.
+- Expõe o endpoint `/outbox/{id}/processed` para confirmar o processamento dos eventos no Query Service.
+
+### 2. **Debezium**
+- Monitora a tabela **Outbox** (`event_outbox`) no PostgreSQL.
+- Publica mudanças no tópico Kafka `outbox.public.event_outbox`.
+
+### 3. **Query Service (MongoDB)**
+- Consome eventos do Kafka via `KafkaEventConsumer`.
+- Projeta os dados em `pedido_read` no MongoDB.
+- Confirma o processamento dos eventos chamando o Command Service (`/outbox/{id}/processed`).
+- Se o Command Service estiver **offline**, salva o evento em `outbox_pending_ack`.
+- O `OutboxAckRetryJob` reenvia os ACKs pendentes a cada 10s quando o Command Service voltar.
+
+### 4. **Snapshots**
+- `AggregateRebuildService` (no Command Service) permite reidratar agregados a partir do **Event Store** ou de **Snapshots**.
+
+### 5. **Consultas**
+- O **Query Service** expõe endpoints REST que consultam diretamente o MongoDB.
+- Exemplo de read models:  
+  - `pedido_read` → visão otimizada de pedidos.
+  - Consultas agregadas (estatísticas de clientes, total gasto, status de pedidos, etc).
 
 ---
 
-## 🛠 Tecnologias Utilizadas
+## 🗄️ Estrutura do Banco de Dados
 
-- **Spring Boot 3.2+**
-- **PostgreSQL** (Event Store, Snapshots, Outbox, Read Models)
-- **Kafka** (plataforma de streaming de eventos)
-- **Debezium** (CDC para Outbox → Kafka)
-- **Flyway** (migração de banco)
-- **Lombok**
-- **Jackson**
-- **Testcontainers**
+### PostgreSQL (Command Service)
+- `event_store` → eventos de domínio (append-only).
+- `event_outbox` → eventos pendentes de publicação (Outbox Pattern).
+- `snapshot_store` → snapshots de agregados.
 
----
-
-## 📦 Pré-requisitos
-
-Certifique-se de ter instalado:
-
-- **Java 17+**
-- **Maven 3.6+**
-- **Docker** e **Docker Compose**
-- **Postman** (para testes)
+### MongoDB (Query Service)
+- `pedido_read` → Read Model de pedidos (otimizado para queries).
+- `outbox_pending_ack` → ACKs pendentes quando o Command Service está offline.
 
 ---
 
-## ▶️ Como Executar
+## 📂 Estrutura de Branches
 
-### 1. Compilar os Microserviços
+- **main** → versão original com PostgreSQL em ambos os serviços.
+- **mongodb** → branch atual, onde o Query Service usa MongoDB.
 
+---
+
+## 🐳 Docker Compose
+
+### Subir infraestrutura:
 ```bash
-# Command Service
-cd command-service
-mvn clean package -DskipTests
-cd ..
-
-# Query Service
-cd query-service
-mvn clean package -DskipTests
-cd ..
+docker-compose up -d --buld
 ```
 
-### 2. Subir Infraestrutura com Docker
-
-Na raiz do projeto:
-
-```bash
-docker-compose up -d --build
-```
-
-Isso inicia:
-- PostgreSQL (com Event Store, Outbox e Read Models)
+### Inclui:
+- PostgreSQL (command-service)
 - Kafka + Zookeeper
-- Debezium
+- Debezium (CDC)
+- MongoDB + Mongo Express
 - Kafka UI (http://localhost:8082)
+---
 
-### 3. Registrar Conector Debezium
+### Obs: Após inicializar os serviços, Registrar Conector Debezium
 
 ```bash
 curl -X POST http://localhost:8083/connectors   -H "Content-Type: application/json"   -d @docker/debezium/register-postgres.json
 ```
 
-### 4. Endpoints dos Serviços
+## 📜 Scripts de Inicialização
 
-- **Command Service:** `http://localhost:8080`
-- **Query Service:** `http://localhost:8081`
+### Índices MongoDB
+Arquivo: `docker/mongo-init/pedido_read_indexes.js`
 
+```js
+db = db.getSiblingDB("pedido_read_db");
+
+db.pedido_read.createIndex({ cliente_id: 1 });
+db.pedido_read.createIndex({ status: 1 });
+db.pedido_read.createIndex({ data_criacao: -1 });
+db.pedido_read.createIndex({ numero_pedido: 1 }, { unique: true });
+db.pedido_read.createIndex({ cliente_email: 1 });
+db.pedido_read.createIndex({ valor_total: 1 });
+```
+
+---
+
+## 📡 Endpoints Principais
+
+### Query Service
+- `GET /api/pedidos/{id}/completo` → Pedido detalhado.
+- `GET /api/pedidos/estatisticas/cliente/{clienteId}/total-gasto` → Total gasto por cliente.
+- `GET /api/pedidos?clienteId=...&status=...` → Filtros dinâmicos.
+
+### Command Service
+- `POST /api/pedidos` → Criação de pedidos.
+- `PUT /api/pedidos/{id}` → Atualização.
+- `POST /outbox/{id}/processed` → Confirmação de evento processado.
+
+---
+
+## 🔄 Fluxo Completo
+
+1. **Command Service** grava evento no **Event Store** e no **Outbox**.
+2. **Debezium** detecta mudanças no `event_outbox` e publica no **Kafka**.
+3. **Query Service** consome evento → atualiza **MongoDB** (`pedido_read`).
+4. Query Service confirma processamento no Command Service.
+   - Se offline → salva no `outbox_pending_ack`.
+   - `OutboxAckRetryJob` reprocessa periodicamente até sucesso.
+5. Consultas são feitas diretamente no **MongoDB** via Query Service.
+6. `AggregateRebuildService` e `SnapshotStore` garantem reidratação eficiente de agregados.
+
+---
+
+## 📊 Tecnologias
+
+- **Spring Boot 3.x**
+- **Kafka**
+- **PostgreSQL** (Command Service)
+- **MongoDB** (Query Service)
+- **Debezium** (CDC / Outbox Pattern)
+- **Docker Compose**
+- **Lombok / JPA / Spring Data MongoDB**
+
+---
+
+## 🚀 Como rodar
+
+### Subir infraestrutura
+```bash
+docker-compose -f docker-compose.yml up -d
+```
+
+### Subir Command Service
+```bash
+./mvnw spring-boot:run -pl command-service
+```
+
+### Subir Query Service (MongoDB branch)
+```bash
+./mvnw spring-boot:run -pl query-service -Dspring-boot.run.profiles=mongodb
+```
 ---
 
 ## 🔎 Roteiro de Testes (Postman)
@@ -165,41 +198,32 @@ Payload:
 
 - Read model atualizado com novo status
 
+
+- Status devem seguir a ordem:
+ - Status final: ENTREGUE
+   - Linha do tempo:
+	 - 2025-08-24T17:40:22Z - PENDENTE
+	 - 2025-08-24T17:40:22Z - CONFIRMADO
+     - 2025-08-24T17:40:22Z - EM_PREPARACAO
+	 - 2025-08-24T17:40:22Z - ENVIADO
+	 - 2025-08-24T17:40:22Z - ENTREGUE
+ex.: não pode voltar de ENTREGUE para EM_PREPARACAO
+ou ex.: de CONFIRMADO para ENVIADO direto
+
 ### 6. Cancelar Pedido
 
 ```http
 DELETE http://localhost:8080/api/pedidos/{pedidoId}
+```
+- **Payload**:
+```json
+{ "motivo": "Desistência" }
 ```
 
 - Evento `PedidoCancelado`
 - Status no read model: `CANCELADO`
 
 ---
-
-## 📂 Estrutura do Projeto
-
-```text
-event-sourcing-project/
-├── command-service/        # Microserviço de Comandos
-│   ├── domain/             # Agregados e Eventos
-│   ├── application/        # Command Handlers e Services
-│   ├── infrastructure/     # EventStore, Outbox, Snapshot
-│   └── admin/              # AggregateRebuildService + RebuildController
-├── query-service/          # Microserviço de Consultas
-│   ├── projection/         # KafkaEventConsumer + PedidoProjectionHandler
-│   ├── readmodel/          # PedidoReadModel + Repository
-│   ├── outbox/             # OutboxClient + PendingAck + RetryJob
-│   └── controller/         # Endpoints de consulta
-├── docker/
-│   ├── postgres/
-│   └── debezium/
-├── docker-compose.yml      # Infra: Postgres, Kafka, Debezium, Kafka-UI
-├── postman_collection.json # Requisições pré-configuradas
-└── README.md
-```
-
----
-
 ## ✅ Fluxo Completo
 
 1. **Command Service**
@@ -220,15 +244,15 @@ event-sourcing-project/
 5. **Consultas**
    - Read Models são consultados via `Query Service`
 
----
-
-## 🔮 Próximos Passos
-
-- Implementar **ProjectionRebuildService** no `Query Service` para recriar
-  projeções diretamente a partir do **Event Store** ou dos **Snapshots**.
-- Melhorar métricas/observabilidade do fluxo de eventos.
-- Expandir os testes automatizados com **Testcontainers**.
 
 ---
 
-👨‍💻 Desenvolvido por Fernando Gilli
+## 📌 Notas Importantes
+
+- `PedidoReadModel` está anotado com `@Field(..., targetType = FieldType.DECIMAL128)` para salvar valores como `NumberDecimal` e permitir agregações.
+- Sempre usar `cliente_id` e `valor_total` nos pipelines de agregação MongoDB.
+- O branch `mongodb` já está isolado do `command-service` — o `query-service` não depende mais de classes do Command.
+
+---
+
+✍️ **Autor:** Fernando Gilli  
