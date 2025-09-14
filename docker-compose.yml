@@ -42,10 +42,13 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
+      # Retention Global
+      #KAFKA_LOG_RETENTION_HOURS: 168   # 7 dias
+      #KAFKA_LOG_RETENTION_BYTES: -1    # ilimitado
     networks:
       - event-sourcing-network
 
-  debezium:
+  debezium-connect:
     image: debezium/connect:2.4
     container_name: debezium-connect
     depends_on:
@@ -62,10 +65,43 @@ services:
       CONFIG_STORAGE_REPLICATION_FACTOR: 1
       OFFSET_STORAGE_REPLICATION_FACTOR: 1
       STATUS_STORAGE_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8083/connectors" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     volumes:
       - ./docker/debezium/register-postgres.json:/kafka/config/register-postgres.json
     networks:
       - event-sourcing-network
+
+  debezium-init:
+    image: curlimages/curl:7.85.0
+    container_name: debezium-init
+    depends_on:
+      debezium-connect:
+        condition: service_healthy
+    entrypoint: [ "/bin/sh", "/kafka/config/init.sh" ]
+    volumes:
+      - ./docker/debezium/register-postgres.json:/kafka/config/register-postgres.json
+      - ./docker/debezium/init.sh:/kafka/config/init.sh
+    networks:
+      - event-sourcing-network
+
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka-init
+    depends_on:
+      - kafka
+    entrypoint: [ "/bin/bash", "-c" ]
+    command: >
+      "sleep 10 &&
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic outbox.public.event_outbox --partitions 1 --replication-factor 1 &&
+      kafka-configs --bootstrap-server kafka:29092 --alter --entity-type topics --entity-name outbox.public.event_outbox --add-config retention.ms=604800000"
+    networks:
+      - event-sourcing-network
+
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -77,8 +113,9 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
       KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: debezium
-      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://debezium:8083
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://debezium-connect:8083
     networks:
       - event-sourcing-network
 
