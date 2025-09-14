@@ -702,6 +702,56 @@
 					"response": []
 				}
 			]
+		},
+		{
+			"name": "Rebuild Aggregates",
+			"item": [
+				{
+					"name": "Reidratar Agregado",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/admin/rebuild/aggregate/{{pedidoId}}",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"admin",
+								"rebuild",
+								"aggregate",
+								"{{pedidoId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reidratar Agregados",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/admin/rebuild/aggregates",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"admin",
+								"rebuild",
+								"aggregates"
+							]
+						}
+					},
+					"response": []
+				}
+			]
 		}
 	],
 	"variable": [
