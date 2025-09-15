@@ -8,9 +8,9 @@ spring:
       database: pedido_read_db
       uuid-representation: standard
       field-naming-strategy: org.springframework.data.mapping.model.SnakeCaseFieldNamingStrategy
-    jackson:
-      deserialization:
-        use-big-decimal-for-floats: true
+  jackson:
+    deserialization:
+      use-big-decimal-for-floats: true
 
   kafka:
     bootstrap-servers: localhost:9092
