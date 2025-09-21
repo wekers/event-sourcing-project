@@ -167,7 +167,7 @@ Foram preparados exemplos no **Postman** para interagir com os serviços.
 
 📥 Baixe os arquivos na raiz do projeto:
 - [`postman_collection.json`](postman_collection.json)
-- [`Event Sourcing.postman_environment.json`](Event%20Sourcing.postman_environment.json)
+- [`Event Sourcing.postman_environment.json`](https://github.com/wekers/event-sourcing-project/blob/mongodb/Even%20Sourcing.postman_environment.json)
 
 Após importar no **Postman**, você poderá testar:
 - Criar, atualizar, cancelar pedidos (**Command Service**)
