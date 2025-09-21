@@ -9,10 +9,10 @@
         <relativePath/>
     </parent>
     <groupId>com.exemplo</groupId>
-    <artifactId>event-sourcing-project</artifactId>
+    <artifactId>command-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>event-sourcing-project</name>
-    <description>Event Sourcing project with Spring Boot</description>
+    <name>command-service</name>
+    <description>Event Sourcing Project</description>
     <properties>
         <java.version>21</java.version>
     </properties>

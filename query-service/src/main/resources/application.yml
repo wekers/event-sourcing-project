@@ -2,44 +2,6 @@ spring:
   application:
     name: query-service
 
-  data:
-    mongodb:
-      uri: mongodb://user:pass@localhost:27018/pedido_read_db?authSource=pedido_read_db
-      database: pedido_read_db
-      uuid-representation: standard
-      field-naming-strategy: org.springframework.data.mapping.model.SnakeCaseFieldNamingStrategy
-  jackson:
-    deserialization:
-      use-big-decimal-for-floats: true
-
-  kafka:
-    bootstrap-servers: localhost:9092
-    consumer:
-      group-id: query-service-group
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      properties:
-        isolation.level: read_committed   # ✅ Importante para transações
-        max.poll.records: 50              # ✅ Número de mensagens por poll
-    listener:
-      ack-mode: MANUAL                    # ✅ Melhor que RECORD para controle preciso
-      concurrency: 3                      # ✅ 3 threads consumidoras
-      poll-timeout: 5000                  # ✅ Timeout de poll em ms
-    retry:
-      topic:
-        enabled: true
-        attempts: 3
-        delay: 2s
-        multiplier: 2.0                   # ✅ Backoff exponencial
-        max-delay: 10s
-
-server:
-  port: 8081
-
-logging:
-  level:
-    com.example.eventsourcing: DEBUG
-    #org.hibernate.SQL: INFO
-    #org.hibernate.type.descriptor.sql.BasicBinder: INFO
+  profiles:
+    active: local # Pode ser alterado para "docker" quando rodar no container
+    #active: docker

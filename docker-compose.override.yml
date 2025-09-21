@@ -1,0 +1,32 @@
+services:
+  command-service:
+    build:
+      context: ./command-service
+      dockerfile: Dockerfile
+    container_name: command-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - kafka
+      - debezium-connect
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    networks:
+      - event-sourcing-network
+
+  query-service:
+    build:
+      context: ./query-service
+      dockerfile: Dockerfile
+    container_name: query-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongo
+      - kafka
+      - command-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    networks:
+      - event-sourcing-network

@@ -1,0 +1,45 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://user:pass@mongo:27017/pedido_read_db?authSource=pedido_read_db
+      database: pedido_read_db
+      uuid-representation: standard
+      field-naming-strategy: org.springframework.data.mapping.model.SnakeCaseFieldNamingStrategy
+
+  #jackson:
+    #deserialization:
+     # use-big-decimal-for-floats: true
+
+  kafka:
+    bootstrap-servers: kafka:29092
+    consumer:
+      group-id: query-service-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        isolation.level: read_committed
+        max.poll.records: 50
+    listener:
+      ack-mode: MANUAL
+      concurrency: 3
+      poll-timeout: 5000
+    retry:
+      topic:
+        enabled: true
+        attempts: 3
+        delay: 2s
+        multiplier: 2.0
+        max-delay: 10s
+
+server:
+  port: 8081
+
+logging:
+  level:
+    com.example.eventsourcing: DEBUG
+
+app:
+  command-service:
+    base-url: http://command-service:8080

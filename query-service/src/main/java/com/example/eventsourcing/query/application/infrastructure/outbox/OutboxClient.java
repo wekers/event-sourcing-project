@@ -2,6 +2,7 @@ package com.example.eventsourcing.query.application.infrastructure.outbox;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -15,9 +16,10 @@ public class OutboxClient {
 
     private final WebClient.Builder webClientBuilder;
 
+    @Value("${app.command-service.base-url}")
+    private String commandServiceBaseUrl;
     public void markAsProcessed(UUID eventId) {
-        String url = "http://localhost:8080/api/admin/outbox/" + eventId + "/processed";
-
+        String url = commandServiceBaseUrl + "/api/admin/outbox/" + eventId + "/processed";
         webClientBuilder.build()
                 .post()
                 .uri(url)

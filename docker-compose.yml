@@ -31,20 +31,20 @@ services:
       - zookeeper
     ports:
       - "9092:9092"
+      - "29092:29092"  # Adicione esta porta para comunicação interna
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
-      # Retention Global
-      #KAFKA_LOG_RETENTION_HOURS: 168   # 7 dias
-      #KAFKA_LOG_RETENTION_BYTES: -1    # ilimitado
     networks:
       - event-sourcing-network
 
@@ -65,6 +65,9 @@ services:
       CONFIG_STORAGE_REPLICATION_FACTOR: 1
       OFFSET_STORAGE_REPLICATION_FACTOR: 1
       STATUS_STORAGE_REPLICATION_FACTOR: 1
+      # Configuração adicional para garantir conectividade
+      CONNECT_REQUEST_TIMEOUT_MS: 30000
+      CONNECT_RETRY_BACKOFF_MS: 1000
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8083/connectors" ]
       interval: 10s
@@ -88,7 +91,6 @@ services:
     networks:
       - event-sourcing-network
 
-
   kafka-init:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka-init
@@ -101,7 +103,6 @@ services:
       kafka-configs --bootstrap-server kafka:29092 --alter --entity-type topics --entity-name outbox.public.event_outbox --add-config retention.ms=604800000"
     networks:
       - event-sourcing-network
-
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -119,32 +120,6 @@ services:
     networks:
       - event-sourcing-network
 
-#  command-service:
-#    build:
-#      context: ./command-service
-#      dockerfile: Dockerfile
-#    container_name: command-service
-#    ports:
-#      - "8080:8080"
-#    depends_on:
-#      - postgres
-#      - kafka
-#      - debezium
-#    networks:
-#      - event-sourcing-network
-#
-#  query-service:
-#    build:
-#      context: ./query-service
-#      dockerfile: Dockerfile
-#    container_name: query-service
-#    ports:
-#      - "8081:8081"
-#    depends_on:
-#      - postgres
-#      - kafka
-#    networks:
-#      - event-sourcing-network
   mongo:
     image: mongo:6.0
     container_name: mongo
@@ -155,7 +130,10 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: rootpassword
       MONGO_INITDB_DATABASE: pedido_read_db
     volumes:
+      - mongo_data:/data/db
       - ./docker/mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - event-sourcing-network
 
 volumes:
   postgres_data:
@@ -164,5 +142,3 @@ volumes:
 networks:
   event-sourcing-network:
     driver: bridge
-
-
