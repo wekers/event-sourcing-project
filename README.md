@@ -2,6 +2,10 @@
 
 Este projeto implementa **DDD + Event Sourcing + CQRS + Outbox Pattern (com CDC via Debezium)** em uma arquitetura baseada em microserviços.  
 Atualmente, o **Query Service** utiliza **MongoDB** como banco de dados para os **Read Models** (antes era PostgreSQL).
+- **Command Service (8080):** Responsável por processar comandos e armazenar eventos no PostgreSQL.
+- **Query Service (8081):** Mantém um *read model* no MongoDB e expõe consultas otimizadas.
+
+Eventos são propagados via **Debezium + Kafka**, garantindo consistência entre escrita e leitura.
 
 ---
 
@@ -50,47 +54,71 @@ Atualmente, o **Query Service** utiliza **MongoDB** como banco de dados para os 
 
 ## 📂 Estrutura de Branches
 
+# ATENÇÃO -> IMPORTANTE!!!
+use a branch atual **mongodb**, não a branch **main**!
 - **main** → versão original com PostgreSQL em ambos os serviços.
 - **mongodb** → branch atual, onde o Query Service usa MongoDB.
 
 ---
 
-## 🐳 Docker Compose
+## 📂 Estrutura dos Serviços
+- `command-service/` → Processa comandos, aplica regras de negócio e publica eventos.
+- `query-service/` → Consome eventos do Kafka e atualiza o MongoDB.
+- `docker/` → Arquivos de configuração de inicialização.
 
-### Subir infraestrutura:
-```bash
-docker-compose up -d --buld
-```
-
-### Inclui:
-- PostgreSQL (command-service)
-- Kafka + Zookeeper
-- Debezium (CDC)
-- MongoDB + Mongo Express
-- Kafka UI (http://localhost:8082)
 ---
 
-### Obs: Após inicializar os serviços, Registrar Conector Debezium
+## 🔧 Tecnologias
+- **Spring Boot 3.x**
+- **PostgreSQL** (Event Store, Outbox, Snapshots)
+- **Flyway** (migração de banco)
+- **MongoDB** (Read Model)
+- **Kafka + Zookeeper** (plataforma de streaming de eventos)
+- **Debezium** (CDC para Outbox → Kafka)
+- **Kafka UI** (interface para inspecionar tópicos)
+- **Docker Compose**
 
+---
+## ▶️ Como Executar
+
+### Primeiramente faça um clone do projeto!
+
+## ⚙️ Perfis de Execução
+### ▶️ Rodar infraestrutura +  serviços apps (tudo dockerizados)
 ```bash
-curl -X POST http://localhost:8083/connectors   -H "Content-Type: application/json"   -d @docker/debezium/register-postgres.json
+docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d --build
 ```
 
-## 📜 Scripts de Inicialização
+### ▶️ Rodar apenas a infraestrutura no Docker + apps localmente (Maven)
+```bash
+docker-compose -f docker-compose.yml up -d
 
-### Índices MongoDB
-Arquivo: `docker/mongo-init/pedido_read_indexes.js`
+# Command Service
+cd command-service
+mvn spring-boot:run -Dspring-boot.run.profiles=local
 
-```js
-db = db.getSiblingDB("pedido_read_db");
-
-db.pedido_read.createIndex({ cliente_id: 1 });
-db.pedido_read.createIndex({ status: 1 });
-db.pedido_read.createIndex({ data_criacao: -1 });
-db.pedido_read.createIndex({ numero_pedido: 1 }, { unique: true });
-db.pedido_read.createIndex({ cliente_email: 1 });
-db.pedido_read.createIndex({ valor_total: 1 });
+# Query Service
+cd query-service
+mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
+
+📌 **Configuração de perfis no `application.yml`:**
+```yaml
+spring:
+  profiles:
+    active: local   # Para rodar localmente
+    #active: docker # Para rodar em containers
+```
+
+---
+
+## 🔗 Acessos Importantes
+- **Command Service:** [http://localhost:8080/api/pedidos](http://localhost:8080/api/pedidos)
+- **Query Service:** [http://localhost:8081/api/pedidos](http://localhost:8081/api/pedidos)
+- **Kafka UI:** [http://localhost:8082](http://localhost:8082)
+- **Debezium Connect:** [http://localhost:8083](http://localhost:8083)
+- **Postgres:** `localhost:5435` (user: postgres / pass: pass)
+- **MongoDB:** `localhost:27018` (user: user / pass: pass)
 
 ---
 
@@ -112,8 +140,8 @@ db.pedido_read.createIndex({ valor_total: 1 });
 
 1. **Command Service** grava evento no **Event Store** e no **Outbox**.
 2. **Debezium** detecta mudanças no `event_outbox` e publica no **Kafka**.
-3. **Query Service** consome evento → atualiza **MongoDB** (`pedido_read`).
-4. Query Service confirma processamento no Command Service.
+3. **Query Service** consome evento do Kafka → atualiza **MongoDB** (`pedido_read`).
+4. Query Service Tenta chamar `Command Service` → `/outbox/{id}/processed` para confirmar **processamento** no **Command Service**.
    - Se offline → salva no `outbox_pending_ack`.
    - `OutboxAckRetryJob` reprocessa periodicamente até sucesso.
 5. Consultas são feitas diretamente no **MongoDB** via Query Service.
@@ -133,27 +161,22 @@ db.pedido_read.createIndex({ valor_total: 1 });
 
 ---
 
-## 🚀 Como rodar
-
-### Subir infraestrutura
-```bash
-docker-compose -f docker-compose.yml up -d
-```
-
-### Subir Command Service
-```bash
-./mvnw spring-boot:run -pl command-service
-```
-
-### Subir Query Service (MongoDB branch)
-```bash
-./mvnw spring-boot:run -pl query-service -Dspring-boot.run.profiles=mongodb
-```
----
-
 ## 🔎 Roteiro de Testes (Postman)
 
+Foram preparados exemplos no **Postman** para interagir com os serviços.
+
+📥 Baixe os arquivos na raiz do projeto:
+- [`postman_collection.json`](postman_collection.json)
+- [`Event Sourcing.postman_environment.json`](Event%20Sourcing.postman_environment.json)
+
+Após importar no **Postman**, você poderá testar:
+- Criar, atualizar, cancelar pedidos (**Command Service**)
+- Consultar pedidos por ID, número, cliente, status (**Query Service**)
+- Estatísticas de pedidos e valores gastos por cliente
+
+---
 ### 1. Criar Pedido (Command)
+
 
 ```http
 POST http://localhost:8080/api/pedidos
@@ -224,6 +247,15 @@ DELETE http://localhost:8080/api/pedidos/{pedidoId}
 - Status no read model: `CANCELADO`
 
 ---
+
+## 📊 Fluxo Resumido do Sistema
+1. O **Command Service** salva eventos no PostgreSQL (tabela `event_outbox`).
+2. O **Debezium** captura os eventos e publica no **Kafka**.
+3. O **Query Service** consome os eventos e atualiza o MongoDB.
+4. As consultas ao sistema são feitas diretamente no **Query Service**.
+
+---
+
 ## ✅ Fluxo Completo
 
 1. **Command Service**
@@ -244,13 +276,19 @@ DELETE http://localhost:8080/api/pedidos/{pedidoId}
 5. **Consultas**
    - Read Models são consultados via `Query Service`
 
-
 ---
 
+## ✅ Status Atual
+- [x] Command Service isolado com PostgreSQL + Debezium
+- [x] Query Service com MongoDB como read model
+- [x] Kafka UI para monitoramento
+- [x] Perfis configurados para rodar **local** ou **docker**
+- [x] Exemplos de API disponíveis no Postman
+
+---
 ## 📌 Notas Importantes
 
 - `PedidoReadModel` está anotado com `@Field(..., targetType = FieldType.DECIMAL128)` para salvar valores como `NumberDecimal` e permitir agregações.
-- Sempre usar `cliente_id` e `valor_total` nos pipelines de agregação MongoDB.
 - O branch `mongodb` já está isolado do `command-service` — o `query-service` não depende mais de classes do Command.
 
 ---
