@@ -1,234 +1,136 @@
-# Projeto Spring Boot Event Sourcing (Microserviços)
+# Spring Boot Event Sourcing Project (Microservices)
 
-Este projeto demonstra uma arquitetura de **Event Sourcing** e **CQRS**
-(Command Query Responsibility Segregation) utilizando **Spring Boot**,
-**PostgreSQL**, **Kafka** e **Debezium**.  
-A aplicação foi refatorada em dois microserviços principais:
+---
+## ✅ UPDATE!
+### 👉 Use the `mongodb` branch
+---
 
-- **Command Service**: responsável por receber comandos, persistir
-  eventos no **Event Store**, gerenciar **Snapshots** e publicar eventos via
-  **Outbox Pattern**.
-- **Query Service**: responsável por consumir eventos do Kafka,
-  construir e manter projeções (Read Models) em um banco relacional e
-  servir consultas. Também faz ACK de eventos processados de volta ao
-  `Command Service`.
+This project demonstrates an Event Sourcing and CQRS (Command Query Responsibility Segregation) architecture using Spring Boot, PostgreSQL, Kafka, and Debezium. It was refactored to separate responsibilities into two distinct microservices:
+
+*   **Command Service:** Responsible for receiving commands, persisting events in the Event Store, managing Snapshots, and publishing events to Kafka via the Outbox Pattern.
+*   **Query Service:** Responsible for consuming events from Kafka, building and maintaining projections (Read Models) in a relational database, and serving queries.
 
 ---
 
-## 🚀 Arquitetura
+## Language
+- [Versão em Português do conteúdo do README](README_PT.md) <br/>
+- [English version of the README content](README.md)
 
-```text
-                       ┌────────────────────────────┐
-                       │   Pedido Command Service   │
-                       │                            │
-    [REST Controller]─>│ PedidoCommandService       │
-                       │            │               │
-                       │            v               │
-                       │       [EventStore]         │
-                       │            │               │
-                       │        [Outbox]            │
-                       │            │               │
-                       └────────────┼───────────────┘
-                                    │
-                                    ▼
-                                [Debezium CDC]
-                                    │
-                                    ▼
-                                 [Kafka]
-                                    │
-                                    ▼
-                       ┌────────────────────────────┐
-                       │    Pedido Query Service    │
-                       │                            │
-                       │ KafkaEventConsumer         │
-                       │            │               │
-                       │            ▼               │
-                       │   [PedidoReadModel DB]     │
-                       │                            │
-                       │ OutboxAckRetryJob (ACKs)   │
-                       └────────────────────────────┘
+---
+
+## Architecture
+
+```
+                          ┌────────────────────────────┐
+                          │   Order Command Service    │
+                          │                            │
+   [REST Controller] ---> │      OrderService          │
+                          │            │               │
+                          │            v               │
+                          │       [EventStore]         │
+                          │            │               │
+                          │         (snapshot)         │
+                          └────────────┼───────────────┘
+                                       │
+                                       v
+                                   [Kafka]
+                                       │
+                                       v
+                          ┌────────────────────────────┐
+                          │     Order Query Service    │
+                          │                            │
+                          │   Projection Worker        │
+                          │            │               │
+                          │            v               │
+                          │     [order_read SQL]       │
+                          └────────────────────────────┘
 ```
 
----
+## Technologies Used
 
-## 🛠 Tecnologias Utilizadas
+*   **Spring Boot 3.2.0:** Framework for developing Java applications.
+*   **PostgreSQL:** Relational database for Event Store, Snapshots, Outbox, and Read Models.
+*   **Kafka:** Event streaming platform for asynchronous communication between services.
+*   **Debezium:** Change Data Capture (CDC) platform for publishing Outbox events to Kafka.
+*   **Flyway:** Database migration tool.
+*   **Lombok:** Library to reduce boilerplate code.
+*   **Jackson:** Library for JSON handling.
+*   **Testcontainers:** For integration testing with real infrastructure in containers.
 
-- **Spring Boot 3.2+**
-- **PostgreSQL** (Event Store, Snapshots, Outbox, Read Models)
-- **Kafka** (plataforma de streaming de eventos)
-- **Debezium** (CDC para Outbox → Kafka)
-- **Flyway** (migração de banco)
-- **Lombok**
-- **Jackson**
-- **Testcontainers**
+## Prerequisites
 
----
+Make sure you have the following software installed on your machine:
 
-## 📦 Pré-requisitos
+*   **Java 17+**
+*   **Maven 3.6+**
+*   **Docker** and **Docker Compose** (or `docker compose`)
+*   **Postman** (to test the endpoints)
 
-Certifique-se de ter instalado:
+## How to Run the Project
 
-- **Java 17+**
-- **Maven 3.6+**
-- **Docker** e **Docker Compose**
-- **Postman** (para testes)
+Follow the steps below to configure, run, and test all functionalities:
 
----
+### 1. Clone the Repository (if applicable) and Navigate to the Project Directory
 
-## ▶️ Como Executar
+### 2. Start the Docker Infrastructure
 
-### 1. Compilar os Microserviços
-
-```bash
-# Command Service
-cd command-service
-mvn clean package -DskipTests
-cd ..
-
-# Query Service
-cd query-service
-mvn clean package -DskipTests
-cd ..
-```
-
-### 2. Subir Infraestrutura com Docker
-
-Na raiz do projeto:
+In the project root folder (`event-sourcing-project`), run Docker Compose to start PostgreSQL, Kafka, Zookeeper, Debezium, and Kafka UI:
 
 ```bash
 docker-compose up -d --build
 ```
 
-Isso inicia:
-- PostgreSQL (com Event Store, Outbox e Read Models)
-- Kafka + Zookeeper
-- Debezium
-- Kafka UI (http://localhost:8082)
+*   **Note:** The `--build` ensures that the images of your microservices are built based on the `Dockerfile`s.
+*   Wait a few minutes until all services are fully ready. You can monitor logs with `docker-compose logs -f`.
 
-### 3. Registrar Conector Debezium
+### 3. Register the Debezium Connector
+
+After the Docker services are `Up`, register the Debezium connector. This will instruct Debezium to monitor the `event_outbox` table in PostgreSQL and publish changes to Kafka.
 
 ```bash
 curl -X POST http://localhost:8083/connectors   -H "Content-Type: application/json"   -d @docker/debezium/register-postgres.json
 ```
 
-### 4. Endpoints dos Serviços
+### 4. Access Management Interfaces (Optional)
 
-- **Command Service:** `http://localhost:8080`
-- **Query Service:** `http://localhost:8081`
+*   **Kafka UI:** Go to `http://localhost:8082` to view Kafka topics, including `outbox.public.event_outbox`.
 
----
+### 5. Test Endpoints with Postman
 
-## 🔎 Roteiro de Testes (Postman)
+The microservices will be running on the following ports:
 
-### 1. Criar Pedido (Command)
+*   **Command Service:** `http://localhost:8080`
+*   **Query Service:** `http://localhost:8081`
 
-```http
-POST http://localhost:8080/api/pedidos
+You can import the `postman_collection.json` file (provided with the project) into Postman to have all pre-configured requests.
+
+#### Test Flow:
+
+1.  **Create Order (Command Service):**
+    *   Send a `POST` request to `http://localhost:8080/api/orders` with the order creation JSON body.
+    *   The returned `orderId` will automatically be saved in a Postman environment variable (if you use the provided collection).
+
+2.  **Check Event Flow (Kafka UI):**
+    *   After creating the order, check the `outbox.public.event_outbox` topic in Kafka UI (`http://localhost:8082`). You should see the `OrderCreated` event message.
+
+3.  **Query Order (Query Service):**
+    *   Send a `GET` request to `http://localhost:8081/api/orders/{{orderId}}` (using the Postman environment variable).
+    *   You should receive the newly created order data, confirming that the event was processed by the Query Service and the Read Model was updated.
+
+4.  **Update/Cancel Order (Command Service):**
+    *   Try the `PUT` and `DELETE` requests in Command Service (`http://localhost:8080/api/orders/{orderId}`) to update or cancel the order.
+    *   Check again in Query Service (`http://localhost:8081/api/orders/{orderId}`) to confirm that the Read Model was updated with the new information.
+
+5.  **Update Order Status (Command Service):**
+    *   Send a `PATCH` request to `http://localhost:8080/api/orders/{orderId}/status` with the JSON body containing the `newStatus` (e.g.: `{"newStatus": "CONFIRMED"}`).
+    *   After each transition, check the order status in Query Service (`http://localhost:8081/api/orders/{orderId}`).
+
+## Snapshot Configuration
+
+The snapshot creation frequency is configured in `command-service/src/main/resources/application.yml`:
+
+```yaml
+app:
+  event-store:
+    snapshot-frequency: 2 # A snapshot is created every 2 events (aggregate version multiple of 2)
 ```
-
-- Gera evento `PedidoCriado`
-- `outbox_event.status = PENDING`
-
-### 2. Debezium → Kafka
-
-- Evento publicado em `outbox.public.event_outbox`
-- `outbox_event.status = PUBLISHED`
-
-### 3. Query Service
-
-```http
-GET http://localhost:8081/api/pedidos/{pedidoId}
-```
-
-- Deve retornar o pedido criado no **read model**.
-
-### 4. Atualizar Pedido
-
-```http
-PUT http://localhost:8080/api/pedidos/{pedidoId}
-```
-
-- Gera evento `PedidoAtualizado`
-- Query Service reflete as mudanças
-
-### 5. Alterar Status
-
-```http
-PATCH http://localhost:8080/api/pedidos/{pedidoId}/status
-```
-
-Payload:
-
-```json
-{ "novoStatus": "CONFIRMADO" }
-```
-
-- Read model atualizado com novo status
-
-### 6. Cancelar Pedido
-
-```http
-DELETE http://localhost:8080/api/pedidos/{pedidoId}
-```
-
-- Evento `PedidoCancelado`
-- Status no read model: `CANCELADO`
-
----
-
-## 📂 Estrutura do Projeto
-
-```text
-event-sourcing-project/
-├── command-service/        # Microserviço de Comandos
-│   ├── domain/             # Agregados e Eventos
-│   ├── application/        # Command Handlers e Services
-│   ├── infrastructure/     # EventStore, Outbox, Snapshot
-│   └── admin/              # AggregateRebuildService + RebuildController
-├── query-service/          # Microserviço de Consultas
-│   ├── projection/         # KafkaEventConsumer + PedidoProjectionHandler
-│   ├── readmodel/          # PedidoReadModel + Repository
-│   ├── outbox/             # OutboxClient + PendingAck + RetryJob
-│   └── controller/         # Endpoints de consulta
-├── docker/
-│   ├── postgres/
-│   └── debezium/
-├── docker-compose.yml      # Infra: Postgres, Kafka, Debezium, Kafka-UI
-├── postman_collection.json # Requisições pré-configuradas
-└── README.md
-```
-
----
-
-## ✅ Fluxo Completo
-
-1. **Command Service**
-   - Grava evento no **Event Store**
-   - Persiste no **Outbox**
-2. **Debezium**
-   - Detecta mudança no Outbox
-   - Publica no **Kafka**
-3. **Query Service**
-   - Consome evento do Kafka
-   - Atualiza o **Read Model**
-   - Tenta chamar `Command Service` → `/outbox/{id}/processed`
-   - Se offline → salva em `outbox_pending_ack`
-   - `OutboxAckRetryJob` reenvia quando voltar
-4. **Snapshots**
-   - `AggregateRebuildService` permite reidratar agregados a partir do Event Store
-   - `SnapshotStore` guarda estado consolidado
-5. **Consultas**
-   - Read Models são consultados via `Query Service`
-
----
-
-## 🔮 Próximos Passos
-
-- Implementar **ProjectionRebuildService** no `Query Service` para recriar
-  projeções diretamente a partir do **Event Store** ou dos **Snapshots**.
-- Melhorar métricas/observabilidade do fluxo de eventos.
-- Expandir os testes automatizados com **Testcontainers**.
-
----
-
-👨‍💻 Desenvolvido por Fernando Gilli
