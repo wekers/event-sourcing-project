@@ -2,7 +2,7 @@
 
 ---
 ## ✅ UPDATE!
-### 👉 Use the `mongodb` branch
+### 👉 Use the [mongodb](https://github.com/wekers/event-sourcing-project/tree/mongodb) branch
 ---
 
 This project demonstrates an Event Sourcing and CQRS (Command Query Responsibility Segregation) architecture using Spring Boot, PostgreSQL, Kafka, and Debezium. It was refactored to separate responsibilities into two distinct microservices:
