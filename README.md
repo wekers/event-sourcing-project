@@ -1,95 +1,101 @@
-# 📦 Event Sourcing Project — Query Service (MongoDB Branch)
+# 📦 Event Sourcing Project (Microservices)— Query Service on (MongoDB Branch)
 
-Este projeto implementa **DDD + Event Sourcing + CQRS + Outbox Pattern (com CDC via Debezium)** em uma arquitetura baseada em microserviços.  
-Atualmente, o **Query Service** utiliza **MongoDB** como banco de dados para os **Read Models** (antes era PostgreSQL).
-- **Command Service (8080):** Responsável por processar comandos e armazenar eventos no PostgreSQL.
-- **Query Service (8081):** Mantém um *read model* no MongoDB e expõe consultas otimizadas.
+This project implements **DDD + Event Sourcing + CQRS + Outbox Pattern (with CDC via Debezium)** in a microservices-based architecture.  
+Currently, the **Query Service** uses **MongoDB** as the database for **Read Models** (previously it was PostgreSQL).
+- **Command Service (8080):** Responsible for processing commands and storing events in PostgreSQL.
+- **Query Service (8081):** Maintains a *read model* in MongoDB and exposes optimized queries.
 
-Eventos são propagados via **Debezium + Kafka**, garantindo consistência entre escrita e leitura.
+Events are propagated via **Debezium + Kafka**, ensuring consistency between write and read.
 
 ---
 
-## ⚙️ Arquitetura
+## Language
+- [Versão em Português do conteúdo do README](README_PT.md) <br/>
+- [English version of the README content](README.md)
+
+---
+
+## ⚙️ Architecture
 
 ### 1. **Command Service**
-- Persiste os eventos no **Event Store** (PostgreSQL).
-- Registra os eventos na tabela **Outbox** (`event_outbox`).
-- Gera snapshots dos agregados em `snapshot_store`.
-- Expõe o endpoint `/outbox/{id}/processed` para confirmar o processamento dos eventos no Query Service.
+- Persists events in the **Event Store** (PostgreSQL).
+- Registers events in the **Outbox** table (`event_outbox`).
+- Generates snapshots of aggregates in `snapshot_store`.
+- Exposes the endpoint `/outbox/{id}/processed` to confirm event processing in the Query Service.
 
 ### 2. **Debezium**
-- Monitora a tabela **Outbox** (`event_outbox`) no PostgreSQL.
-- Publica mudanças no tópico Kafka `outbox.public.event_outbox`.
+- Monitors the **Outbox** table (`event_outbox`) in PostgreSQL.
+- Publishes changes to the Kafka topic `outbox.public.event_outbox`.
 
 ### 3. **Query Service (MongoDB)**
-- Consome eventos do Kafka via `KafkaEventConsumer`.
-- Projeta os dados em `pedido_read` no MongoDB.
-- Confirma o processamento dos eventos chamando o Command Service (`/outbox/{id}/processed`).
-- Se o Command Service estiver **offline**, salva o evento em `outbox_pending_ack`.
-- O `OutboxAckRetryJob` reenvia os ACKs pendentes a cada 10s quando o Command Service voltar.
+- Consumes events from Kafka via `KafkaEventConsumer`.
+- Projects data into `pedido_read` in MongoDB.
+- Confirms event processing by calling the Command Service (`/outbox/{id}/processed`).
+- If the Command Service is **offline**, stores the event in `outbox_pending_ack`.
+- The `OutboxAckRetryJob` resends pending ACKs every 10s once the Command Service is back online.
 
 ### 4. **Snapshots**
-- `AggregateRebuildService` (no Command Service) permite reidratar agregados a partir do **Event Store** ou de **Snapshots**.
+- `AggregateRebuildService` (in the Command Service) allows rehydrating aggregates from the **Event Store** or from **Snapshots**.
 
-### 5. **Consultas**
-- O **Query Service** expõe endpoints REST que consultam diretamente o MongoDB.
-- Exemplo de read models:  
-  - `pedido_read` → visão otimizada de pedidos.
-  - Consultas agregadas (estatísticas de clientes, total gasto, status de pedidos, etc).
+### 5. **Queries**
+- The **Query Service** exposes REST endpoints that query MongoDB directly.
+- Example of read models:  
+  - `pedido_read` → optimized view of orders.
+  - Aggregated queries (customer statistics, total spent, order status, etc).
 
 ---
 
-## 🗄️ Estrutura do Banco de Dados
+## 🗄️ Database Structure
 
 ### PostgreSQL (Command Service)
-- `event_store` → eventos de domínio (append-only).
-- `event_outbox` → eventos pendentes de publicação (Outbox Pattern).
-- `snapshot_store` → snapshots de agregados.
+- `event_store` → domain events (append-only).
+- `event_outbox` → events pending publication (Outbox Pattern).
+- `snapshot_store` → aggregate snapshots.
 
 ### MongoDB (Query Service)
-- `pedido_read` → Read Model de pedidos (otimizado para queries).
-- `outbox_pending_ack` → ACKs pendentes quando o Command Service está offline.
+- `pedido_read` → Read Model of orders (optimized for queries).
+- `outbox_pending_ack` → Pending ACKs when the Command Service is offline.
 
 ---
 
-## 📂 Estrutura de Branches
+## 📂 Branch Structure
 
-# ATENÇÃO -> IMPORTANTE!!!
-use a branch atual **mongodb**, não a branch **main**!
-- **main** → versão original com PostgreSQL em ambos os serviços.
-- **mongodb** → branch atual, onde o Query Service usa MongoDB.
-
----
-
-## 📂 Estrutura dos Serviços
-- `command-service/` → Processa comandos, aplica regras de negócio e publica eventos.
-- `query-service/` → Consome eventos do Kafka e atualiza o MongoDB.
-- `docker/` → Arquivos de configuração de inicialização.
+# ATTENTION -> IMPORTANT!!!
+Use the current branch **mongodb**, not the **main** branch!
+- **main** → original version with PostgreSQL in both services.
+- **mongodb** → current branch, where the Query Service uses MongoDB.
 
 ---
 
-## 🔧 Tecnologias
+## 📂 Service Structure
+- `command-service/` → Processes commands, applies business rules, and publishes events.
+- `query-service/` → Consumes events from Kafka and updates MongoDB.
+- `docker/` → Startup configuration files.
+
+---
+
+## 🔧 Technologies
 - **Spring Boot 3.x**
 - **PostgreSQL** (Event Store, Outbox, Snapshots)
-- **Flyway** (migração de banco)
+- **Flyway** (database migration)
 - **MongoDB** (Read Model)
-- **Kafka + Zookeeper** (plataforma de streaming de eventos)
-- **Debezium** (CDC para Outbox → Kafka)
-- **Kafka UI** (interface para inspecionar tópicos)
+- **Kafka + Zookeeper** (event streaming platform)
+- **Debezium** (CDC for Outbox → Kafka)
+- **Kafka UI** (interface to inspect topics)
 - **Docker Compose**
 
 ---
-## ▶️ Como Executar
+## ▶️ How to Run
 
-### Primeiramente faça um clone do projeto!
+### First, clone the project!
 
-## ⚙️ Perfis de Execução
-### ▶️ Rodar infraestrutura +  serviços apps (tudo dockerizados)
+## ⚙️ Execution Profiles
+### ▶️ Run infrastructure + app services (all dockerized)
 ```bash
 docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d --build
 ```
 
-### ▶️ Rodar apenas a infraestrutura no Docker + apps localmente (Maven)
+### ▶️ Run only infrastructure in Docker + apps locally (Maven)
 ```bash
 docker-compose -f docker-compose.yml up -d
 
@@ -102,17 +108,17 @@ cd query-service
 mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-📌 **Configuração de perfis no `application.yml`:**
+📌 **Profile configuration in `application.yml`:**
 ```yaml
 spring:
   profiles:
-    active: local   # Para rodar localmente
-    #active: docker # Para rodar em containers
+    active: local   # To run locally
+    #active: docker # To run in containers
 ```
 
 ---
 
-## 🔗 Acessos Importantes
+## 🔗 Important Access Points
 - **Command Service:** [http://localhost:8080/api/pedidos](http://localhost:8080/api/pedidos)
 - **Query Service:** [http://localhost:8081/api/pedidos](http://localhost:8081/api/pedidos)
 - **Kafka UI:** [http://localhost:8082](http://localhost:8082)
@@ -122,34 +128,34 @@ spring:
 
 ---
 
-## 📡 Endpoints Principais
+## 📡 Main Endpoints
 
 ### Query Service
-- `GET /api/pedidos/{id}/completo` → Pedido detalhado.
-- `GET /api/pedidos/estatisticas/cliente/{clienteId}/total-gasto` → Total gasto por cliente.
-- `GET /api/pedidos?clienteId=...&status=...` → Filtros dinâmicos.
+- `GET /api/pedidos/{id}/completo` → Detailed order.
+- `GET /api/pedidos/estatisticas/cliente/{clienteId}/total-gasto` → Total spent by customer.
+- `GET /api/pedidos?clienteId=...&status=...` → Dynamic filters.
 
 ### Command Service
-- `POST /api/pedidos` → Criação de pedidos.
-- `PUT /api/pedidos/{id}` → Atualização.
-- `POST /outbox/{id}/processed` → Confirmação de evento processado.
+- `POST /api/pedidos` → Create orders.
+- `PUT /api/pedidos/{id}` → Update.
+- `POST /outbox/{id}/processed` → Confirmation of processed event.
 
 ---
 
-## 🔄 Fluxo Completo
+## 🔄 Complete Flow
 
-1. **Command Service** grava evento no **Event Store** e no **Outbox**.
-2. **Debezium** detecta mudanças no `event_outbox` e publica no **Kafka**.
-3. **Query Service** consome evento do Kafka → atualiza **MongoDB** (`pedido_read`).
-4. Query Service Tenta chamar `Command Service` → `/outbox/{id}/processed` para confirmar **processamento** no **Command Service**.
-   - Se offline → salva no `outbox_pending_ack`.
-   - `OutboxAckRetryJob` reprocessa periodicamente até sucesso.
-5. Consultas são feitas diretamente no **MongoDB** via Query Service.
-6. `AggregateRebuildService` e `SnapshotStore` garantem reidratação eficiente de agregados.
+1. **Command Service** records event in **Event Store** and in **Outbox**.
+2. **Debezium** detects changes in `event_outbox` and publishes to **Kafka**.
+3. **Query Service** consumes event from Kafka → updates **MongoDB** (`pedido_read`).
+4. Query Service tries to call `Command Service` → `/outbox/{id}/processed` to confirm **processing** in **Command Service**.
+   - If offline → saves in `outbox_pending_ack`.
+   - `OutboxAckRetryJob` reprocesses periodically until successful.
+5. Queries are made directly in **MongoDB** via Query Service.
+6. `AggregateRebuildService` and `SnapshotStore` ensure efficient rehydration of aggregates.
 
 ---
 
-## 📊 Tecnologias
+## 📊 Technologies
 
 - **Spring Boot 3.x**
 - **Kafka**
@@ -161,33 +167,33 @@ spring:
 
 ---
 
-## 🔎 Roteiro de Testes (Postman)
+## 🔎 Test Scenarios (Postman)
 
-Foram preparados exemplos no **Postman** para interagir com os serviços.
+Examples were prepared in **Postman** to interact with the services.
 
-📥 Baixe os arquivos na raiz do projeto:
+📥 Download the files at the project root:
 - [`postman_collection.json`](postman_collection.json)
 - [`Event Sourcing.postman_environment.json`](https://github.com/wekers/event-sourcing-project/blob/mongodb/Even%20Sourcing.postman_environment.json)
 
-Após importar no **Postman**, você poderá testar:
-- Criar, atualizar, cancelar pedidos (**Command Service**)
-- Consultar pedidos por ID, número, cliente, status (**Query Service**)
-- Estatísticas de pedidos e valores gastos por cliente
+After importing into **Postman**, you will be able to test:
+- Create, update, cancel orders (**Command Service**)
+- Query orders by ID, number, customer, status (**Query Service**)
+- Order statistics and total amounts spent per customer
 
 ---
-### 1. Criar Pedido (Command)
+### 1. Create Order (Command)
 
 
 ```http
 POST http://localhost:8080/api/pedidos
 ```
 
-- Gera evento `PedidoCriado`
+- Generates `PedidoCriado` event
 - `outbox_event.status = PENDING`
 
 ### 2. Debezium → Kafka
 
-- Evento publicado em `outbox.public.event_outbox`
+- Event published in `outbox.public.event_outbox`
 - `outbox_event.status = PUBLISHED`
 
 ### 3. Query Service
@@ -196,18 +202,18 @@ POST http://localhost:8080/api/pedidos
 GET http://localhost:8081/api/pedidos/{pedidoId}
 ```
 
-- Deve retornar o pedido criado no **read model**.
+- Should return the order created in the **read model**.
 
-### 4. Atualizar Pedido
+### 4. Update Order
 
 ```http
 PUT http://localhost:8080/api/pedidos/{pedidoId}
 ```
 
-- Gera evento `PedidoAtualizado`
-- Query Service reflete as mudanças
+- Generates `PedidoAtualizado` event
+- Query Service reflects the changes
 
-### 5. Alterar Status
+### 5. Change Status
 
 ```http
 PATCH http://localhost:8080/api/pedidos/{pedidoId}/status
@@ -219,21 +225,20 @@ Payload:
 { "novoStatus": "CONFIRMADO" }
 ```
 
-- Read model atualizado com novo status
+- Read model updated with new status
 
+- Status must follow the order:
+ - Final status: ENTREGUE (DELIVERED)
+   - Timeline:
+     - 2025-08-24T17:40:22Z - PENDENTE (PENDING)
+     - 2025-08-24T17:40:22Z - CONFIRMADO (CONFIRMED)
+     - 2025-08-24T17:40:22Z - EM_PREPARACAO (IN_PREPARATION)
+     - 2025-08-24T17:40:22Z - ENVIADO (SENT)
+     - 2025-08-24T17:40:22Z - ENTREGUE (DELIVERED)
+ex.: it cannot go back from DELIVERED to IN_PREPARATION  
+or ex.: from CONFIRMED directly to SENT
 
-- Status devem seguir a ordem:
- - Status final: ENTREGUE
-   - Linha do tempo:
-	 - 2025-08-24T17:40:22Z - PENDENTE
-	 - 2025-08-24T17:40:22Z - CONFIRMADO
-     - 2025-08-24T17:40:22Z - EM_PREPARACAO
-	 - 2025-08-24T17:40:22Z - ENVIADO
-	 - 2025-08-24T17:40:22Z - ENTREGUE
-ex.: não pode voltar de ENTREGUE para EM_PREPARACAO
-ou ex.: de CONFIRMADO para ENVIADO direto
-
-### 6. Cancelar Pedido
+### 6. Cancel Order
 
 ```http
 DELETE http://localhost:8080/api/pedidos/{pedidoId}
@@ -243,54 +248,54 @@ DELETE http://localhost:8080/api/pedidos/{pedidoId}
 { "motivo": "Desistência" }
 ```
 
-- Evento `PedidoCancelado`
-- Status no read model: `CANCELADO`
+- `PedidoCancelado` event
+- Status in read model: `CANCELADO` (CANCELLED)
 
 ---
 
-## 📊 Fluxo Resumido do Sistema
-1. O **Command Service** salva eventos no PostgreSQL (tabela `event_outbox`).
-2. O **Debezium** captura os eventos e publica no **Kafka**.
-3. O **Query Service** consome os eventos e atualiza o MongoDB.
-4. As consultas ao sistema são feitas diretamente no **Query Service**.
+## 📊 System Flow Summary
+1. The **Command Service** saves events in PostgreSQL (`event_outbox` table).
+2. **Debezium** captures the events and publishes to **Kafka**.
+3. The **Query Service** consumes events and updates MongoDB.
+4. System queries are made directly to the **Query Service**.
 
 ---
 
-## ✅ Fluxo Completo
+## ✅ Complete Flow
 
 1. **Command Service**
-   - Grava evento no **Event Store**
-   - Persiste no **Outbox**
+   - Records event in **Event Store**
+   - Persists in **Outbox**
 2. **Debezium**
-   - Detecta mudança no Outbox
-   - Publica no **Kafka**
+   - Detects change in Outbox
+   - Publishes to **Kafka**
 3. **Query Service**
-   - Consome evento do Kafka
-   - Atualiza o **Read Model**
-   - Tenta chamar `Command Service` → `/outbox/{id}/processed`
-   - Se offline → salva em `outbox_pending_ack`
-   - `OutboxAckRetryJob` reenvia quando voltar
+   - Consumes event from Kafka
+   - Updates the **Read Model**
+   - Tries to call `Command Service` → `/outbox/{id}/processed`
+   - If offline → stores in `outbox_pending_ack`
+   - `OutboxAckRetryJob` resends when back online
 4. **Snapshots**
-   - `AggregateRebuildService` permite reidratar agregados a partir do Event Store
-   - `SnapshotStore` guarda estado consolidado
-5. **Consultas**
-   - Read Models são consultados via `Query Service`
+   - `AggregateRebuildService` allows rehydrating aggregates from Event Store
+   - `SnapshotStore` stores consolidated state
+5. **Queries**
+   - Read Models are queried via `Query Service`
 
 ---
 
-## ✅ Status Atual
-- [x] Command Service isolado com PostgreSQL + Debezium
-- [x] Query Service com MongoDB como read model
-- [x] Kafka UI para monitoramento
-- [x] Perfis configurados para rodar **local** ou **docker**
-- [x] Exemplos de API disponíveis no Postman
+## ✅ Current Status
+- [x] Command Service isolated with PostgreSQL + Debezium
+- [x] Query Service with MongoDB as read model
+- [x] Kafka UI for monitoring
+- [x] Profiles configured to run **local** or **docker**
+- [x] API examples available in Postman
 
 ---
-## 📌 Notas Importantes
+## 📌 Important Notes
 
-- `PedidoReadModel` está anotado com `@Field(..., targetType = FieldType.DECIMAL128)` para salvar valores como `NumberDecimal` e permitir agregações.
-- O branch `mongodb` já está isolado do `command-service` — o `query-service` não depende mais de classes do Command.
+- `PedidoReadModel` is annotated with `@Field(..., targetType = FieldType.DECIMAL128)` to save values as `NumberDecimal` and allow aggregations.
+- The `mongodb` branch is already isolated from `command-service` — the `query-service` no longer depends on Command classes.
 
 ---
 
-✍️ **Autor:** Fernando Gilli  
+✍️ **Author:** Fernando Gilli  
