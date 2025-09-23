@@ -30,6 +30,11 @@ public class Pedido extends AggregateRoot {
     private List<ItemPedido> itens = new ArrayList<>();
     private EnderecoEntrega enderecoEntrega;
 
+    // Sobrescrevendo o getter padrão do Lombok para garantir imutabilidade:
+    public List<ItemPedido> getItens() {
+        return List.copyOf(this.itens);
+    }
+
     // Construtor para criação de novo pedido
     public Pedido(UUID id, String numeroPedido, UUID clienteId, String clienteNome,
                   String clienteEmail, List<ItemPedido> itens, EnderecoEntrega enderecoEntrega) {
@@ -121,6 +126,9 @@ public class Pedido extends AggregateRoot {
     }
 
     public void atualizarStatus(StatusPedido novoStatus) {
+        if (novoStatus == null) {
+            throw new IllegalArgumentException("Status não pode ser nulo");
+        }
         switch (novoStatus) {
             case PENDENTE -> throw new IllegalStateException("Não é possível definir o status para PENDENTE diretamente.");
             case CONFIRMADO -> confirmar();
