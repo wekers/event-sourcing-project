@@ -7,6 +7,7 @@ import java.util.UUID;
 public record PedidoDTO(
         UUID id,
         String numeroPedido,
+        UUID clienteId,
         String clienteNome,
         String clienteEmail,
         StatusPedido status,
@@ -18,6 +19,7 @@ public record PedidoDTO(
         return new PedidoDTO(
                 readModel.getId(),
                 readModel.getNumeroPedido(),
+                readModel.getClienteId(),
                 readModel.getClienteNome(),
                 readModel.getClienteEmail(),
                 readModel.getStatus(),
