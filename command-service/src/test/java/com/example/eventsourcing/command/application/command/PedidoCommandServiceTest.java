@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -315,6 +316,23 @@ class PedidoCommandServiceTest {
         assertEquals("Erro ao criar pedido", thrown.getMessage());
         assertTrue(thrown.getCause() instanceof RuntimeException);
         assertEquals("Problema inesperado", thrown.getCause().getMessage());
+    }
+
+    @Test
+    void deveRetornarVersaoAtual() {
+        // Arrange
+        UUID pedidoId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        long versaoEsperada = 1L;
+
+        // Mock direto do repositório (sem criar pedido real)
+        when(pedidoRepository.getCurrentVersion(pedidoId)).thenReturn(versaoEsperada);
+
+        // Act
+        Long versaoObtida = pedidoCommandService.obterVersaoAtual(pedidoId);
+
+        // Assert
+        assertThat(versaoObtida).isEqualTo(versaoEsperada);
+        verify(pedidoRepository).getCurrentVersion(pedidoId);
     }
 
 }
