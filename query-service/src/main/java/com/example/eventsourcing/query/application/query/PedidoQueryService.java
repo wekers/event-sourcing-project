@@ -17,9 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -88,28 +86,34 @@ public class PedidoQueryService {
     }
 
     private PedidoCompletoDTO toPedidoCompletoDTO(PedidoReadModel readModel) {
+        // CORREÇÃO: Retornar lista vazia em vez de null
+        List<PedidoCompletoDTO.ItemPedidoCompletoDTO> itensDTO =
+                readModel.getItens() != null ?
+                        readModel.getItens().stream()
+                                .map(item -> PedidoCompletoDTO.ItemPedidoCompletoDTO.builder()
+                                        .produtoId(item.produtoId())
+                                        .produtoNome(item.produtoNome())
+                                        .produtoDescricao(item.produtoDescricao())
+                                        .quantidade(item.quantidade())
+                                        .precoUnitario(item.precoUnitario())
+                                        .valorTotal(item.valorTotal())
+                                        .build())
+                                .collect(Collectors.toList())
+                        : Collections.emptyList(); // ← Lista vazia se for null
+
         return PedidoCompletoDTO.builder()
                 .id(readModel.getId())
                 .numeroPedido(readModel.getNumeroPedido())
                 .clienteId(readModel.getClienteId())
                 .clienteNome(readModel.getClienteNome())
                 .clienteEmail(readModel.getClienteEmail())
-                .status(readModel.getStatus()) // 👈 já é StatusPedido
+                .status(readModel.getStatus())
                 .valorTotal(readModel.getValorTotal())
                 .dataCriacao(readModel.getDataCriacao())
                 .dataAtualizacao(readModel.getDataAtualizacao())
                 .dataCancelamento(readModel.getDataCancelamento())
                 .observacoes(readModel.getObservacoes())
-                .itens(readModel.getItens().stream()
-                        .map(item -> PedidoCompletoDTO.ItemPedidoCompletoDTO.builder()
-                                .produtoId(item.produtoId())
-                                .produtoNome(item.produtoNome())
-                                .produtoDescricao(item.produtoDescricao())
-                                .quantidade(item.quantidade())
-                                .precoUnitario(item.precoUnitario())
-                                .valorTotal(item.valorTotal())
-                                .build())
-                        .collect(Collectors.toList()))
+                .itens(itensDTO) // Sempre será uma lista (vazia ou com itens)
                 .enderecoEntrega(readModel.getEnderecoEntrega() != null ?
                         PedidoCompletoDTO.EnderecoEntregaDTO.builder()
                                 .logradouro(readModel.getEnderecoEntrega().logradouro())
@@ -125,7 +129,6 @@ public class PedidoQueryService {
                 .version(readModel.getVersion())
                 .build();
     }
-
 
 
     // Métodos adicionais para estatísticas
