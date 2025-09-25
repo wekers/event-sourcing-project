@@ -70,8 +70,8 @@ services:
       CONNECT_RETRY_BACKOFF_MS: 1000
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8083/connectors" ]
-      interval: 10s
-      timeout: 5s
+      interval: 20s
+      timeout: 10s
       retries: 10
     volumes:
       - ./docker/debezium/register-postgres.json:/kafka/config/register-postgres.json
