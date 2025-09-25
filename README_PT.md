@@ -48,22 +48,35 @@ Eventos são propagados via **Debezium + Kafka**, garantindo consistência entre
 ## 🗄️ Estrutura do Banco de Dados
 
 ### PostgreSQL (Command Service)
-- `event_store` → eventos de domínio (append-only).
-- `event_outbox` → eventos pendentes de publicação (Outbox Pattern).
-- `snapshot_store` → snapshots de agregados.
+
+| Tabela                 | Descrição                                                                 |
+|-------------------------|---------------------------------------------------------------------------|
+| `event_outbox`         | Implementa o **Outbox Pattern** – eventos pendentes a serem publicados.   |
+| `event_store`          | Armazena todos os eventos do sistema (append-only).                       |
+| `flyway_schema_history`| Controla a versão e histórico de migrações no banco de dados.             |
+| `snapshot_store`       | Armazena **snapshots** dos agregados para reconstrução rápida.            |
 
 ### MongoDB (Query Service)
-- `pedido_read` → Read Model de pedidos (otimizado para queries).
-- `outbox_pending_ack` → ACKs pendentes quando o Command Service está offline.
+
+| Coleção              | Descrição                                                                                     |
+|----------------------|------------------------------------------------------------------------------------------------|
+| `pedido_read`        | **Read Model** otimizado para consultas de pedidos (CQRS).                                    |
+| `outbox_pending_ack` | Armazena ACKs pendentes quando o Command Service está **offline**.                             |
+
+📌 **Fluxo de ACK**:  
+- O **Query Service** consome eventos do Kafka → persiste no `pedido_read`.  
+- Tenta chamar `Command Service → /outbox/{id}/processed` para marcar como `PROCESSED`.  
+- Se o Command estiver **offline**, salva em `outbox_pending_ack`.  
+- O `OutboxAckRetryJob` reprocessa periodicamente até sucesso quando o Command voltar.  
 
 ---
 
 ## 📂 Estrutura de Branches
 
-# ATENÇÃO -> IMPORTANTE!!!
-use a branch atual **mongodb**, não a branch **main**!
+# ❗ ATENÇÃO -> IMPORTANTE!!!
+👉 use a branch atual **mongodb**, não a branch **main**!
 - **main** → versão original com PostgreSQL em ambos os serviços.
-- **mongodb** → branch atual, onde o Query Service usa MongoDB.
+- 👉 **mongodb** → branch atual, onde o Query Service usa MongoDB.
 
 ---
 
@@ -80,9 +93,10 @@ use a branch atual **mongodb**, não a branch **main**!
 - **Flyway** (migração de banco)
 - **MongoDB** (Read Model)
 - **Kafka + Zookeeper** (plataforma de streaming de eventos)
-- **Debezium** (CDC para Outbox → Kafka)
+- **Debezium** (CDC para Outbox Pattern → Kafka)
 - **Kafka UI** (interface para inspecionar tópicos)
 - **Docker Compose**
+- **Lombok / JPA / Spring Data MongoDB**
 
 ---
 ## ▶️ Como Executar
@@ -107,6 +121,7 @@ mvn spring-boot:run -Dspring-boot.run.profiles=local
 cd query-service
 mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
+![docker-compose](https://raw.githubusercontent.com/wekers/event-sourcing-project/refs/heads/mongodb/img/docker-compose-print.png)
 
 📌 **Configuração de perfis no `application.yml`:**
 ```yaml
@@ -147,23 +162,11 @@ spring:
 1. **Command Service** grava evento no **Event Store** e no **Outbox**.
 2. **Debezium** detecta mudanças no `event_outbox` e publica no **Kafka**.
 3. **Query Service** consome evento do Kafka → atualiza **MongoDB** (`pedido_read`).
-4. Query Service Tenta chamar `Command Service` → `/outbox/{id}/processed` para confirmar **processamento** no **Command Service**.
+4. **Query Service** Tenta chamar `Command Service` → `/outbox/{id}/processed` para confirmar **processamento** no **Command Service**.
    - Se offline → salva no `outbox_pending_ack`.
    - `OutboxAckRetryJob` reprocessa periodicamente até sucesso.
-5. Consultas são feitas diretamente no **MongoDB** via Query Service.
+5. Consultas são feitas diretamente no **MongoDB** via Query Service (Read Models).
 6. `AggregateRebuildService` e `SnapshotStore` garantem reidratação eficiente de agregados.
-
----
-
-## 📊 Tecnologias
-
-- **Spring Boot 3.x**
-- **Kafka**
-- **PostgreSQL** (Command Service)
-- **MongoDB** (Query Service)
-- **Debezium** (CDC / Outbox Pattern)
-- **Docker Compose**
-- **Lombok / JPA / Spring Data MongoDB**
 
 ---
 
@@ -255,32 +258,187 @@ DELETE http://localhost:8080/api/pedidos/{pedidoId}
 ---
 
 ## 📊 Fluxo Resumido do Sistema
-1. O **Command Service** salva eventos no PostgreSQL (tabela `event_outbox`).
+1. O **Command Service** salva eventos no **PostgreSQL** (tabela `event_outbox`).
 2. O **Debezium** captura os eventos e publica no **Kafka**.
-3. O **Query Service** consome os eventos e atualiza o MongoDB.
+3. O **Query Service** consome os eventos e atualiza o **MongoDB**.
 4. As consultas ao sistema são feitas diretamente no **Query Service**.
 
 ---
 
-## ✅ Fluxo Completo
 
-1. **Command Service**
-   - Grava evento no **Event Store**
-   - Persiste no **Outbox**
-2. **Debezium**
-   - Detecta mudança no Outbox
-   - Publica no **Kafka**
-3. **Query Service**
-   - Consome evento do Kafka
-   - Atualiza o **Read Model**
-   - Tenta chamar `Command Service` → `/outbox/{id}/processed`
-   - Se offline → salva em `outbox_pending_ack`
-   - `OutboxAckRetryJob` reenvia quando voltar
-4. **Snapshots**
-   - `AggregateRebuildService` permite reidratar agregados a partir do Event Store
-   - `SnapshotStore` guarda estado consolidado
-5. **Consultas**
-   - Read Models são consultados via `Query Service`
+
+## 📊 Relatório Completo de Testes
+
+### 🟢 Command-Service
+**Resumo:** 57 testes executados — **57 aprovados ✅**
+
+#### 🔹 Testes Unitários
+**PedidoCommandServiceTest**
+- deveCriarPedidoComSucesso()
+- deveLancarExcecaoQuandoAtualizarPedidoEmEstadoInvalido()
+- devePropagarConcurrencyExceptionAoAtualizarStatus()
+- deveAtualizarStatusDoPedidoComFluxoCompleto()
+- deveRetornarVersaoAtual()
+- deveCancelarPedido()
+- deveAtualizarPedidoExistenteComDominioReal()
+- deveEncapsularErrosNaoTratadosEmIllegalArgumentException()
+- naoDeveCriarPedidoComCamposObrigatoriosNulos()
+- deveLancarExcecaoPedidoNotFoundQuandoAtualizarPedido()
+- deveLancarExcecaoQuandoAtualizarStatusEmEstadoInvalido()
+- deveLancarExcecaoQuandoCancelarPedidoEmEstadoInvalido()
+
+**PedidoTest (Domínio)**
+- naoDevePermitirDefinirStatusPendenteDiretamente()
+- naoDeveAtualizarPedidoCancelado()
+- deveReconstruirPedidoDoHistorico()
+- naoDeveAtualizarPedidoForaDoStatusPendente()
+- atualizarStatusDeveChamarMetodosCorretos()
+- pedidoVazioDeveTerEstadoInicialNulo()
+- naoDeveCancelarPedidoJaCancelado()
+- deveAtualizarPedidoComSucesso()
+- deveCriarPedidoComStatusPendente()
+- naoDeveEnviarPedidoQueNaoEstaEmPreparacao()
+- devePermitirAtualizarObservacoesParaVazio()
+- devePermitirAtualizarObservacoesParaNulo()
+- deveReconstruirHistoricoComTodosOsEventos()
+- naoDeveAtualizarStatusParaStatusInvalido()
+- deveCancelarPedidoEmPreparacaoOuEnviado()
+- naoDeveIniciarPreparacaoDePedidoPendente()
+- naoDevePermitirModificarListaDeItensExternamente()
+- deveCancelarPedidoPendente()
+- naoDeveEntregarPedidoQueNaoFoiEnviado()
+- naoDeveCancelarPedidoEntregue()
+- naoDeveConfirmarPedidoJaConfirmado()
+- deveSeguirFluxoCompletoDeStatus()
+- naoDeveAtualizarPedidoEntregue()
+- deveCancelarViaAtualizarStatus()
+- naoDeveAtualizarStatusDePedidoJaCancelado()
+
+#### 🔹 Testes de Integração
+**PedidoIntegrationTest**
+- deveRetornarErroAoCriarPedidoCamposNulos()
+- deveAtualizarStatusPedido()
+- naoDeveAtualizarPedidoQueNaoExiste()
+- deveRetornarVersaoAtual()
+- deveCancelarPedido()
+- deveCriarEPersistirPedido()
+- naoDeveCancelarPedidoEntregue()
+- deveAtualizarPedidoExistente()
+
+**PedidoCommandControllerTest**
+- Deve criar um pedido com sucesso e validar binding
+- Deve retornar 409 ao atualizar pedido com conflito de negócio
+- Deve retornar 400 se o número do pedido for nulo (validação @NotBlank)
+- Deve atualizar um pedido existente e validar binding
+- Deve cancelar um pedido existente e validar binding
+- Deve retornar 404 ao tentar atualizar pedido inexistente e validar body vazio
+- Deve retornar 400 ao passar enum inválido para novoStatus
+- Deve retornar 400 ao enviar UUID malformado no pathVar
+- Deve atualizar status de um pedido e validar binding do enum
+
+#### 🔹 Testes E2E
+- **FluxoCompletoPedidoE2ETest** → Criar, atualizar, confirmar, preparar, enviar, entregar e cancelar pedido
+- **Teste E2E de Integração Complexo** → Criar pedido e verificar integração entre serviços
+- **Teste E2E de Integração Simples** → fluxoCompletoPedido()
+
+---
+
+### 🟢 Query-Service
+**Resumo:** 35 testes executados — **35 aprovados ✅**
+
+#### 🔹 Testes Unitários — PedidoQueryService
+- Deve buscar pedido completo por número
+- Deve listar pedidos por cliente
+- Deve lidar com pedido vazio (sem itens e sem endereço)
+- Deve lidar com pedido sem endereço
+- Deve converter PedidoDTO corretamente
+- Deve contar pedidos por cliente
+- Deve listar pedidos por status
+- Deve contar pedidos por status
+- Deve buscar pedido por ID
+- Deve buscar pedido por número
+- Deve buscar pedido completo por ID
+- Deve lidar com pedido sem itens
+- Deve retornar vazio quando pedido não existe
+
+#### 🔹 Testes Unitários — PedidoProjectionHandler
+- Deve processar todos os tipos de evento de status
+- Deve cancelar pedido existente
+- Deve atualizar status do pedido existente
+- Deve criar novo pedido quando receber evento PedidoCriado
+- Deve lançar IllegalStateException se pedido não encontrado
+
+#### 🔹 Testes de Integração — PedidoQueryController
+- Deve buscar pedidos por status
+- Deve buscar pedidos por cliente com paginação
+- Deve contar pedidos por cliente
+- Deve contar pedidos por status
+- Deve buscar pedido por ID com sucesso
+- Deve buscar pedido por número com sucesso
+- Deve buscar pedido completo por ID
+- Deve retornar 404 quando pedido não encontrado
+
+#### 🔹 Testes Funcionais E2E — Query Service
+- Fluxo completo: Total gasto por cliente
+- Fluxo completo: Buscar pedidos por status
+- Fluxo completo: Buscar pedido por ID
+- Fluxo completo: Listar todos os pedidos
+- Fluxo completo: Estatísticas por status
+- Fluxo completo: Listar pedidos por cliente
+- Fluxo completo: Buscar pedido por número
+- Fluxo completo: Buscar pedido completo
+- Fluxo completo: Estatísticas por cliente
+
+---
+## 🧪 Resultados de Testes
+
+Foram implementados **testes automatizados** para garantir robustez em ambos os serviços:
+
+### ✅ Command Service
+- **57 testes executados** (unitários, integração e E2E).  
+- Abrangem:
+  - Criação, atualização, cancelamento e mudança de status de pedidos.
+  - Fluxo completo: criar, atualizar, preparar, enviar, entregar e cancelar pedido.
+  - Validações de regras de negócio (status inválidos, campos obrigatórios, UUID inválido etc).
+  - Integração entre serviços com Query Service.
+
+### ✅ Query Service
+- **35 testes executados** (unitários, integração e E2E).  
+- Abrangem:
+  - Consultas por ID, número do pedido, cliente e status.
+  - Estatísticas de pedidos por cliente (total gasto, status, quantidade).
+  - Testes E2E consumindo eventos do Kafka, persistindo no MongoDB e confirmando processamento no Command Service.
+  - Cenários de fallback quando o Command Service está **offline**, persistindo eventos em `outbox_pending_ack`.
+
+---
+
+### 📌 Conclusão Geral
+- **Command-Service:** 57/57 testes passaram ✅  
+- **Query-Service:** 35/35 testes passaram ✅  
+- Todos os testes de **unidade, integração e E2E** foram executados com sucesso.  
+- O fluxo **Outbox Pattern + CQRS** validado com:
+  - **PostgreSQL**:  
+    - `event_outbox` → Outbox Pattern (eventos a publicar)  
+    - `event_store` → Armazenamento append-only de eventos  
+    - `snapshot_store` → Snapshots de agregados  
+    - `flyway_schema_history` → Controle de versão do schema
+  - **MongoDB**:  
+    - `pedido_read` → Read Model otimizado para consultas (CQRS)  
+    - `outbox_pending_ack` → Buffer quando Command-Service está offline  
+
+> O **Query-Service** chama o endpoint `Command-Service /outbox/{id}/processed` para marcar eventos como processados.  
+Se o Command-Service estiver offline → evento é salvo em `outbox_pending_ack`.  
+Quando volta → `OutboxAckRetryJob` reprocessa automaticamente.
+
+---
+
+#### 📲 Command-Service Test PrintScreen:
+![Tests](https://raw.githubusercontent.com/wekers/event-sourcing-project/refs/heads/mongodb/img/test-command-service.png)
+
+---
+
+#### 📲 Query-Service Test PrintScreen:
+![Tests](https://raw.githubusercontent.com/wekers/event-sourcing-project/refs/heads/mongodb/img/test-query-service.png)
 
 ---
 
@@ -290,6 +448,8 @@ DELETE http://localhost:8080/api/pedidos/{pedidoId}
 - [x] Kafka UI para monitoramento
 - [x] Perfis configurados para rodar **local** ou **docker**
 - [x] Exemplos de API disponíveis no Postman
+- [x] Integração validada com **testes E2E** (com Kafka + Outbox Pattern).  
+- [x] Consultas avançadas no Query Service (estatísticas, total gasto, filtros dinâmicos).  
 
 ---
 ## 📌 Notas Importantes
