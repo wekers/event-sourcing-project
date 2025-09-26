@@ -11,17 +11,112 @@ Events are propagated via **Debezium + Kafka**, ensuring consistency between wri
 
 ## Language
 - [Portuguese version of the README content](README_PT.md) <br/>
-- [English version of the README content](README.md)
+- [English version of the README content](README_EN.md)
 
 ---
 
-## ⚙️ Architecture
+## ⚙️ Architecture Diagram
+
+### 🏗️ Context Diagram (C4 Level 1)
+
+**System:** Event Sourcing Project (Microservices).<br/>
+**Purpose:** Show the system in its external context.
+```mermaid
+graph TD
+    A[User/Client] --> B[Command Service:8080]
+    A --> C[Query Service:8081]
+    B --> D[(PostgreSQL)]
+    C --> E[(MongoDB)]
+    B --> F[Kafka]
+    C --> F
+    F --> G[Debezium]
+    G --> D
+    H[Kafka UI:8082] --> F
+    I[Debezium Connect:8083] --> G
+```
+**Legend:**
+- **User/Client:** Interacts with the services via REST.
+- **Command Service:** Processes commands and stores events.
+- **Query Service:** Provides optimized queries based on the read model.
+- **PostgreSQL:** Event Store + Outbox + Snapshots.
+- **MongoDB:** Read Model (`pedido_read`).
+- **Kafka:** Messaging layer for events.
+- **Debezium:** CDC to capture changes in PostgreSQL.
+- **Kafka UI / Debezium Connect:** Monitoring tools.
+  
+---
+
+### 🧱 Container Diagram (C4 Level 2)
+
+```mermaid
+graph TB
+    subgraph "Microservices"
+        CS[Command Service<br/>Spring Boot:8080]
+        QS[Query Service<br/>Spring Boot:8081]
+    end
+
+    subgraph "Data Infrastructure"
+        PSQL[(PostgreSQL<br/>Event Store, Outbox, Snapshots)]
+        MONGO[(MongoDB<br/>Read Model)]
+    end
+
+    subgraph "Streaming & CDC"
+        K[Kafka]
+        Z[Zookeeper]
+        DBZ[Debezium Connect]
+    end
+
+    subgraph "Monitoring"
+        KUI[Kafka UI:8082]
+    end
+
+    CS --> PSQL
+    CS --> K
+    DBZ --> PSQL
+    DBZ --> K
+    QS --> K
+    QS --> MONGO
+    QS -.-> CS
+    K --> Z
+```
+---
+
+### 🔀 Sequence Diagram: Order Creation Flow
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant CS as Command Service
+    participant PSQL as PostgreSQL
+    participant DBZ as Debezium
+    participant K as Kafka
+    participant QS as Query Service
+    participant MONGO as MongoDB
+
+    U->>CS: POST /api/pedidos
+    CS->>PSQL: Insert Event + Outbox (PENDING)
+    CS-->>U: 200 OK
+    DBZ->>PSQL: Poll Outbox
+    PSQL->>DBZ: New event
+    DBZ->>K: Publish to topic outbox.public.event_outbox
+    QS->>K: Consume event
+    QS->>MONGO: Update pedido_read
+    QS->>CS: POST /outbox/{id}/processed
+    alt CS Online
+        CS->>PSQL: Mark as PROCESSED
+    else CS Offline
+        QS->>MONGO: Save to outbox_pending_ack
+        loop Every 10s
+            QS->>CS: Retry ACK
+        end
+    end
+```
+---
 
 ### 1. **Command Service**
 - Persists events in the **Event Store** (PostgreSQL).
 - Registers events in the **Outbox** table (`event_outbox`).
-- Generates aggregate snapshots in `snapshot_store`.
-- Exposes the endpoint `/outbox/{id}/processed` to confirm event processing in the Query Service.
+- Generates snapshots of aggregates in `snapshot_store`.
+- Exposes the endpoint `/outbox/{id}/processed` to confirm the processing of events in the Query Service.
 
 ### 2. **Debezium**
 - Monitors the **Outbox** table (`event_outbox`) in PostgreSQL.
@@ -32,7 +127,7 @@ Events are propagated via **Debezium + Kafka**, ensuring consistency between wri
 - Projects data into `pedido_read` in MongoDB.
 - Confirms event processing by calling the Command Service (`/outbox/{id}/processed`).
 - If the Command Service is **offline**, saves the event in `outbox_pending_ack`.
-- The `OutboxAckRetryJob` resends pending ACKs every 10s when the Command Service returns online.
+- The `OutboxAckRetryJob` resends pending ACKs every 10 seconds when the Command Service is back online.
 
 ### 4. **Snapshots**
 - `AggregateRebuildService` (in the Command Service) allows rehydrating aggregates from the **Event Store** or from **Snapshots**.
@@ -40,8 +135,8 @@ Events are propagated via **Debezium + Kafka**, ensuring consistency between wri
 ### 5. **Queries**
 - The **Query Service** exposes REST endpoints that query MongoDB directly.
 - Example read models:  
-  - `pedido_read` → optimized view of orders.
-  - Aggregate queries (customer statistics, total spent, order status, etc).
+  - `pedido_read` → optimized order view.
+  - Aggregated queries (customer statistics, total spent, order status, etc).
 
 ---
 
@@ -49,25 +144,43 @@ Events are propagated via **Debezium + Kafka**, ensuring consistency between wri
 
 ### PostgreSQL (Command Service)
 
-| Table                  | Description                                                                |
-|------------------------|----------------------------------------------------------------------------|
-| `event_outbox`         | Implements the **Outbox Pattern** – events pending to be published.        |
-| `event_store`          | Stores all system events (append-only).                                    |
-| `flyway_schema_history`| Tracks database version and migration history.                             |
-| `snapshot_store`       | Stores **snapshots** of aggregates for fast reconstruction.                |
+| Table                  | Description                                                                 |
+|------------------------|-----------------------------------------------------------------------------|
+| `event_outbox`         | Implements the **Outbox Pattern** – pending events to be published.         |
+| `event_store`          | Stores all system events (append-only).                                     |
+| `flyway_schema_history`| Tracks database versioning and migration history.                           |
+| `snapshot_store`       | Stores **snapshots** of aggregates for fast reconstruction.                 |
 
 ### MongoDB (Query Service)
 
 | Collection             | Description                                                                 |
 |------------------------|-----------------------------------------------------------------------------|
-| `pedido_read`          | **Read Model** optimized for order queries (CQRS).                          |
-| `outbox_pending_ack`   | Stores pending ACKs when the Command Service is **offline**.                |
+| `pedido_read`          | **Read Model** optimized for order queries (CQRS).                         |
+| `outbox_pending_ack`   | Stores pending ACKs when the Command Service is **offline**.               |
 
 📌 **ACK Flow**:  
-- The **Query Service** consumes events from Kafka → persists them in `pedido_read`.  
-- It attempts to call the Command Service → `/outbox/{id}/processed` to mark as `PROCESSED`.  
+- The **Query Service** consumes events from Kafka → persists them to `pedido_read`.  
+- It attempts to call the Command Service → `/outbox/{id}/processed` to mark the event as `PROCESSED`.  
 - If the Command Service is **offline**, the event is saved in `outbox_pending_ack`.  
-- The `OutboxAckRetryJob` reprocesses periodically until success when the Command Service returns.
+- The `OutboxAckRetryJob` reprocesses periodically until successful when the Command Service comes back online.  
+
+---
+
+### 🗃️ Data Model Diagram
+
+#### PostgreSQL (Command Service)
+| Table | Main Fields |
+|-------|-------------|
+| `event_outbox` | id, aggregate_id, event_type, payload, status, created_at |
+| `event_store` | id, aggregate_id, version, event_type, payload, timestamp |
+| `snapshot_store` | aggregate_id, version, snapshot_data, created_at |
+| `flyway_schema_history` | version, description, script, installed_on |
+
+#### MongoDB (Query Service)
+| Collection | Main Fields |
+|-----------|-------------|
+| `pedido_read` | _id, pedidoId, clienteId, status, items[], total, createdAt |
+| `outbox_pending_ack` | _id, outboxId, aggregateId, retryCount, lastAttempt |
 
 ---
 
@@ -83,20 +196,22 @@ Events are propagated via **Debezium + Kafka**, ensuring consistency between wri
 ## 📂 Service Structure
 - `command-service/` → Processes commands, applies business rules and publishes events.
 - `query-service/` → Consumes events from Kafka and updates MongoDB.
-- `docker/` → Initialization configuration files.
+- `docker/` → Startup configuration files.
 
 ---
 
 ## 🔧 Technologies
-- **Spring Boot 3.x**
-- **PostgreSQL** (Event Store, Outbox, Snapshots)
-- **Flyway** (database migration)
-- **MongoDB** (Read Model)
-- **Kafka + Zookeeper** (event streaming platform)
-- **Debezium** (CDC for Outbox Pattern → Kafka)
-- **Kafka UI** (interface to inspect topics)
-- **Docker Compose**
-- **Lombok / JPA / Spring Data MongoDB**
+- **Spring Boot 3.x** (Framework for developing Java applications)
+- **PostgreSQL** (Relational database for Event Store, Snapshots, Outbox)
+- **Flyway** (Database migration tool)
+- **MongoDB** (NoSQL database for Read Model)
+- **Kafka + Zookeeper** (Event streaming platform for asynchronous communication between services)
+- **Debezium** (Change Data Capture (CDC) platform to publish Outbox events to Kafka)
+- **Lombok** (Library to reduce boilerplate code)
+- **Jackson** (JSON handling library)
+- **Kafka UI** (Interface to inspect topics)
+- **Testcontainers** (For integration tests with real infrastructure in containers)
+- **Docker Compose** (Tool to simplify running multi-container Docker applications)
 
 ---
 ## ▶️ How to Run
@@ -133,6 +248,18 @@ spring:
 
 ---
 
+## 🎞️ Snapshot Configuration
+
+The snapshot creation frequency is configured in `command-service/src/main/resources/application.yml`:
+
+```yaml
+app:
+  event-store:
+    snapshot-frequency: 2 # A snapshot is created every 2 events (aggregate version multiple of 2)
+```
+---
+
+
 ## 🔗 Important Access Points
 - **Command Service:** [http://localhost:8080/api/pedidos](http://localhost:8080/api/pedidos)
 - **Query Service:** [http://localhost:8081/api/pedidos](http://localhost:8081/api/pedidos)
@@ -152,7 +279,7 @@ spring:
 
 ### Command Service
 - `POST /api/pedidos` → Create orders.
-- `PUT /api/pedidos/{id}` → Update an order.
+- `PUT /api/pedidos/{id}` → Update.
 - `POST /outbox/{id}/processed` → Confirm processed event.
 
 ---
@@ -164,9 +291,9 @@ spring:
 3. **Query Service** consumes the event from Kafka → updates **MongoDB** (`pedido_read`).
 4. **Query Service** attempts to call `Command Service` → `/outbox/{id}/processed` to confirm **processing** in the **Command Service**.
    - If offline → saves in `outbox_pending_ack`.
-   - `OutboxAckRetryJob` reprocesses periodically until success.
+   - `OutboxAckRetryJob` reprocesses periodically until successful.
 5. Queries are executed directly in **MongoDB** via the Query Service (Read Models).
-6. `AggregateRebuildService` and `SnapshotStore` ensure efficient rehydration of aggregates.
+6. `AggregateRebuildService` and `SnapshotStore` ensure efficient aggregate rehydration.
 
 ---
 
@@ -191,7 +318,7 @@ After importing into **Postman**, you will be able to test:
 POST http://localhost:8080/api/pedidos
 ```
 
-- Generates `PedidoCriado` event
+- Generates `OrderCreated` event (original: `PedidoCriado`)
 - `outbox_event.status = PENDING`
 
 ### 2. Debezium → Kafka
@@ -213,7 +340,7 @@ GET http://localhost:8081/api/pedidos/{pedidoId}
 PUT http://localhost:8080/api/pedidos/{pedidoId}
 ```
 
-- Generates `PedidoAtualizado` event
+- Generates `OrderUpdated` event (original: `PedidoAtualizado`)
 - Query Service reflects the changes
 
 ### 5. Change Status
@@ -251,7 +378,7 @@ DELETE http://localhost:8080/api/pedidos/{pedidoId}
 { "motivo": "Desistência" }
 ```
 
-- `PedidoCancelado` event
+- Generates `OrderCancelled` event (original: `PedidoCancelado`)
 - Status in read model: `CANCELADO` (CANCELLED)
 
 ---
@@ -263,6 +390,8 @@ DELETE http://localhost:8080/api/pedidos/{pedidoId}
 4. System queries are executed directly via the **Query Service**.
 
 ---
+
+
 
 ## 📊 Complete Test Report
 
@@ -334,9 +463,9 @@ DELETE http://localhost:8080/api/pedidos/{pedidoId}
 - Should update order status and validate enum binding
 
 #### 🔹 E2E Tests
-- **FluxoCompletoPedidoE2ETest** → Create, update, confirm, prepare, send, deliver and cancel order
+- **FullOrderFlowE2ETest** → Create, update, confirm, prepare, send, deliver and cancel order
 - **Complex Integration E2E Test** → Create order and verify integration between services
-- **Simple Integration E2E Test** → fluxoCompletoPedido()
+- **Simple Integration E2E Test** → fullOrderFlow()
 
 ---
 
