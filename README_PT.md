@@ -15,8 +15,101 @@ Eventos são propagados via **Debezium + Kafka**, garantindo consistência entre
 
 ---
 
-## ⚙️ Arquitetura
+## ⚙️ Diagrama de Arquitetura
 
+### 🏗️ Diagrama de Contexto (C4 Nível 1)
+
+**Sistema:** Event Sourcing Project (Microserviços).<br/>
+**Propósito:** Mostrar o sistema em seu contexto externo.
+```mermaid
+graph TD
+    A[Usuário/Cliente] --> B[Command Service:8080]
+    A --> C[Query Service:8081]
+    B --> D[(PostgreSQL)]
+    C --> E[(MongoDB)]
+    B --> F[Kafka]
+    C --> F
+    F --> G[Debezium]
+    G --> D
+    H[Kafka UI:8082] --> F
+    I[Debezium Connect:8083] --> G
+```
+**Legenda:**
+- **Usuário/Cliente:** Interage com os serviços via REST.
+- **Command Service:** Processa comandos e armazena eventos.
+- **Query Service:** Fornece consultas otimizadas a partir do read model.
+- **PostgreSQL:** Event Store + Outbox + Snapshots.
+- **MongoDB:** Read Model (pedido_read).
+- **Kafka:** Mensageria para eventos.
+- **Debezium:** CDC para capturar mudanças no PostgreSQL.
+- **Kafka UI / Debezium Connect:** Ferramentas de monitoramento.
+  
+---
+
+### 🧱 Diagrama de Contêineres (C4 Nível 2)
+
+```mermaid
+graph TB
+    subgraph "Microserviços"
+        CS[Command Service<br/>Spring Boot:8080]
+        QS[Query Service<br/>Spring Boot:8081]
+    end
+
+    subgraph "Infraestrutura de Dados"
+        PSQL[(PostgreSQL<br/>Event Store, Outbox, Snapshots)]
+        MONGO[(MongoDB<br/>Read Model)]
+    end
+
+    subgraph "Streaming & CDC"
+        K[Kafka]
+        Z[Zookeeper]
+        DBZ[Debezium Connect]
+    end
+
+    subgraph "Monitoramento"
+        KUI[Kafka UI:8082]
+    end
+
+    CS --> PSQL
+    CS --> K
+    DBZ --> PSQL
+    DBZ --> K
+    QS --> K
+    QS --> MONGO
+    QS -.-> CS
+    K --> Z
+```
+---
+### 🔀 Diagrama de Sequência: Fluxo de Criação de Pedido
+```mermaid
+sequenceDiagram
+    participant U as Usuário
+    participant CS as Command Service
+    participant PSQL as PostgreSQL
+    participant DBZ as Debezium
+    participant K as Kafka
+    participant QS as Query Service
+    participant MONGO as MongoDB
+
+    U->>CS: POST /api/pedidos
+    CS->>PSQL: Insert Event + Outbox (PENDING)
+    CS-->>U: 200 OK
+    DBZ->>PSQL: Poll Outbox
+    PSQL->>DBZ: Novo evento
+    DBZ->>K: Publica no tópico outbox.public.event_outbox
+    QS->>K: Consome evento
+    QS->>MONGO: Atualiza pedido_read
+    QS->>CS: POST /outbox/{id}/processed
+    alt CS Online
+        CS->>PSQL: Marca como PROCESSED
+    else CS Offline
+        QS->>MONGO: Salva em outbox_pending_ack
+        loop A cada 10s
+            QS->>CS: Retry ACK
+        end
+    end
+```
+---
 ### 1. **Command Service**
 - Persiste os eventos no **Event Store** (PostgreSQL).
 - Registra os eventos na tabela **Outbox** (`event_outbox`).
@@ -70,6 +163,23 @@ Eventos são propagados via **Debezium + Kafka**, garantindo consistência entre
 - O `OutboxAckRetryJob` reprocessa periodicamente até sucesso quando o Command voltar.  
 
 ---
+### 🗃️ Diagrama de Modelo de Dados
+
+#### PostgreSQL (Command Service)
+|Tabela	| Campos Principais   |
+|-------|---------------------|
+| `event_outbox` | id, aggregate_id, event_type, payload, status, created_at |
+|`event_store` |id, aggregate_id, version, event_type, payload, timestamp
+|`snapshot_store` |	aggregate_id, version, snapshot_data, created_at
+|`flyway_schema_history` |version, description, script, installed_on
+
+#### MongoDB (Query Service)
+|Coleção	| Campos Principais |
+|-----------|-------------------|
+|`pedido_read` |	_id, pedidoId, clienteId, status, itens[], total, dataCriacao |
+|`outbox_pending_ack` |_id, outboxId, aggregateId, retryCount, lastAttempt |
+
+---
 
 ## 📂 Estrutura de Branches
 
@@ -88,15 +198,18 @@ Eventos são propagados via **Debezium + Kafka**, garantindo consistência entre
 ---
 
 ## 🔧 Tecnologias
-- **Spring Boot 3.x**
-- **PostgreSQL** (Event Store, Outbox, Snapshots)
-- **Flyway** (migração de banco)
-- **MongoDB** (Read Model)
-- **Kafka + Zookeeper** (plataforma de streaming de eventos)
-- **Debezium** (CDC para Outbox Pattern → Kafka)
-- **Kafka UI** (interface para inspecionar tópicos)
-- **Docker Compose**
-- **Lombok / JPA / Spring Data MongoDB**
+- **Spring Boot 3.x** (Framework para desenvolvimento de aplicações Java)
+- **PostgreSQL** (Banco de dados relacional para Event Store, Snapshots, Outbox)
+- **Flyway** (Ferramenta de migração de banco de dados)
+- **MongoDB** (Banco de dados NoSQL para Read Model)
+- **Kafka + Zookeeper** (Plataforma de streaming de eventos para comunicação assíncrona entre os serviços)
+- **Debezium** (Plataforma de Change Data Capture (CDC) para publicar eventos do Outbox para o Kafka)
+- **Lombok:** (Biblioteca para reduzir código boilerplate)
+- **Jackson:** (Biblioteca para manipulação de JSON)
+- **Kafka UI** (Interface para inspecionar tópicos)
+- **Testcontainers:** (Para testes de integração com infraestrutura real em contêineres)
+- **Docker Compose** (Ferramenta que simplifica a execução de aplicações com múltiplos contêineres Docker)
+
 
 ---
 ## ▶️ Como Executar
@@ -130,8 +243,18 @@ spring:
     active: local   # Para rodar localmente
     #active: docker # Para rodar em containers
 ```
-
 ---
+## 🎞️ Configuração de Snapshot
+
+A frequência de criação de snapshots é configurada no `command-service/src/main/resources/application.yml`:
+
+```yaml
+app:
+  event-store:
+    snapshot-frequency: 2 # Um snapshot é criado a cada 2 eventos (versão do agregado múltipla de 2)
+```
+---
+
 
 ## 🔗 Acessos Importantes
 - **Command Service:** [http://localhost:8080/api/pedidos](http://localhost:8080/api/pedidos)
