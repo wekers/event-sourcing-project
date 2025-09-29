@@ -31,7 +31,7 @@ services:
       - zookeeper
     ports:
       - "9092:9092"
-      - "29092:29092"  # Adicione esta porta para comunicação interna
+      - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -45,6 +45,12 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server=localhost:9092 --list || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     networks:
       - event-sourcing-network
 
@@ -52,8 +58,10 @@ services:
     image: debezium/connect:2.4
     container_name: debezium-connect
     depends_on:
-      - kafka
-      - postgres
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_started
     restart: always
     ports:
       - "8083:8083"
@@ -66,14 +74,14 @@ services:
       CONFIG_STORAGE_REPLICATION_FACTOR: 1
       OFFSET_STORAGE_REPLICATION_FACTOR: 1
       STATUS_STORAGE_REPLICATION_FACTOR: 1
-      # Configuração adicional para garantir conectividade
       CONNECT_REQUEST_TIMEOUT_MS: 30000
       CONNECT_RETRY_BACKOFF_MS: 1000
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8083/connectors" ]
-      interval: 20s
+      test: ["CMD", "curl", "-f", "http://localhost:8083/"]
+      interval: 30s
       timeout: 10s
-      retries: 10
+      retries: 20
+      start_period: 60s
     volumes:
       - ./docker/debezium/register-postgres.json:/kafka/config/register-postgres.json
     networks:
