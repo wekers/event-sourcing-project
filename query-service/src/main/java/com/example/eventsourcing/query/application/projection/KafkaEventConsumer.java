@@ -3,8 +3,7 @@ package com.example.eventsourcing.query.application.projection;
 import com.example.eventsourcing.query.application.PedidoReadModelRepository;
 import com.example.eventsourcing.query.application.events.*;
 import com.example.eventsourcing.query.application.infrastructure.outbox.OutboxClient;
-import com.example.eventsourcing.query.application.infrastructure.outbox.OutboxPendingAck;
-import com.example.eventsourcing.query.application.infrastructure.outbox.OutboxPendingAckRepository;
+import com.example.eventsourcing.query.application.infrastructure.outbox.PendingAckService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +25,7 @@ public class KafkaEventConsumer {
     private final ObjectMapper objectMapper;
     private final PedidoReadModelRepository readModelRepository;
     private final OutboxClient outboxClient;
-    private final OutboxPendingAckRepository pendingAckRepository; // ✅ novo
+    private final PendingAckService pendingAckService; // usar o service centralizado
 
     @KafkaListener(
             topics = "outbox.public.event_outbox",
@@ -64,7 +63,7 @@ public class KafkaEventConsumer {
             // deduplicação
             var existingModel = readModelRepository.findById(aggregateId);
             if (existingModel.isPresent() && existingModel.get().getVersion() >= eventVersion) {
-                log.debug("⏭️ Ignorando versão duplicada {}", eventVersion);
+                log.debug("Ignorando versão duplicada {}", eventVersion);
                 tryMarkAsProcessedOrSave(outboxEventId);
                 ack.acknowledge();
                 return;
@@ -88,7 +87,7 @@ public class KafkaEventConsumer {
             outboxClient.markAsProcessed(outboxEventId);
         } catch (Exception ex) {
             log.warn("⚠️ Command-service offline, salvando {} em pendingAck", outboxEventId);
-            pendingAckRepository.save(new OutboxPendingAck(outboxEventId));
+            pendingAckService.savePendingAck(outboxEventId); // usa o service
         }
     }
 
@@ -112,4 +111,3 @@ public class KafkaEventConsumer {
         }
     }
 }
-
