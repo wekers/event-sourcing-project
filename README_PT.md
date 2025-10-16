@@ -168,17 +168,20 @@ sequenceDiagram
 #### PostgreSQL (Command Service)
 |Tabela	| Campos Principais   |
 |-------|---------------------|
-| `event_outbox` | id, aggregate_id, event_type, payload, status, created_at |
-|`event_store` |id, aggregate_id, version, event_type, payload, timestamp
-|`snapshot_store` |	aggregate_id, version, snapshot_data, created_at
-|`flyway_schema_history` |version, description, script, installed_on
+| `event_outbox` | id, aggregate_id, aggregate_type, event_type, event_data (jsonb), created_at, processed_at, status |
+| `event_store` | id, aggregate_id, aggregate_type, event_type, event_data (jsonb), version, created_at |
+| `snapshot_store` | id, aggregate_id, aggregate_type, aggregate_data (jsonb), version, created_at |
+| `flyway_schema_history` | version, description, script, installed_on |
 
 #### MongoDB (Query Service)
 |Coleção	| Campos Principais |
 |-----------|-------------------|
-|`pedido_read` |	_id, pedidoId, clienteId, status, itens[], total, dataCriacao |
-|`outbox_pending_ack` |_id, outboxId, aggregateId, retryCount, lastAttempt |
+| `pedido_read` | _id, numero_pedido, clienteId, status, version, itens[], valor_total, data_criacao |
+| `outbox_pending_ack` | _id, outbox_event_id, retry_count, created_at |
 
+---
+#### 📲 PostgreSQL Diagrama:
+![Postgres](https://raw.githubusercontent.com/wekers/event-sourcing-project/refs/heads/mongodb/img/postgresql_database_diagram.png)
 ---
 
 ## 📂 Estrutura de Branches
@@ -278,6 +281,9 @@ app:
 - `PUT /api/pedidos/{id}` → Atualização.
 - `POST /outbox/{id}/processed` → Confirmação de evento processado.
 
+---
+#### 📲 Listar Pedido Completo - Postman PrintScreen:
+![Postman](https://raw.githubusercontent.com/wekers/event-sourcing-project/refs/heads/mongodb/img/postman_complete_printscreen.png)
 ---
 
 ## 🔄 Fluxo Completo
@@ -379,6 +385,9 @@ DELETE http://localhost:8080/api/pedidos/{pedidoId}
 - Status no read model: `CANCELADO`
 
 ---
+#### 📲 MongoDB Compass PrintScreen:
+![MongoDB](https://raw.githubusercontent.com/wekers/event-sourcing-project/refs/heads/mongodb/img/mongodb_complete_printscreen.png)
+---
 
 ## 📊 Fluxo Resumido do Sistema
 1. O **Command Service** salva eventos no **PostgreSQL** (tabela `event_outbox`).
@@ -387,7 +396,6 @@ DELETE http://localhost:8080/api/pedidos/{pedidoId}
 4. As consultas ao sistema são feitas diretamente no **Query Service**.
 
 ---
-
 
 
 ## 📊 Relatório Completo de Testes

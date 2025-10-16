@@ -171,18 +171,22 @@ sequenceDiagram
 #### PostgreSQL (Command Service)
 | Table | Main Fields |
 |-------|-------------|
-| `event_outbox` | id, aggregate_id, event_type, payload, status, created_at |
-| `event_store` | id, aggregate_id, version, event_type, payload, timestamp |
-| `snapshot_store` | aggregate_id, version, snapshot_data, created_at |
+| `event_outbox` | id, aggregate_id, aggregate_type, event_type, event_data (jsonb), created_at, processed_at, status |
+| `event_store` | id, aggregate_id, aggregate_type, event_type, event_data (jsonb), version, created_at |
+| `snapshot_store` | id, aggregate_id, aggregate_type, aggregate_data (jsonb), version, created_at |
 | `flyway_schema_history` | version, description, script, installed_on |
 
 #### MongoDB (Query Service)
 | Collection | Main Fields |
 |-----------|-------------|
-| `pedido_read` | _id, pedidoId, clienteId, status, items[], total, createdAt |
-| `outbox_pending_ack` | _id, outboxId, aggregateId, retryCount, lastAttempt |
+| `pedido_read` | _id, numero_pedido, clienteId, status, version, itens[], valor_total, data_criacao |
+| `outbox_pending_ack` | _id, outbox_event_id, retry_count, created_at |
 
 ---
+#### 📲 PostgreSQL Diagram:
+![Postgres](https://raw.githubusercontent.com/wekers/event-sourcing-project/refs/heads/mongodb/img/postgresql_database_diagram.png)
+---
+
 
 ## 📂 Branch Structure
 
@@ -283,6 +287,9 @@ app:
 - `POST /outbox/{id}/processed` → Confirm processed event.
 
 ---
+#### 📲 Get Complete Order - Postman PrintScreen:
+![Postman](https://raw.githubusercontent.com/wekers/event-sourcing-project/refs/heads/mongodb/img/postman_complete_printscreen.png)
+---
 
 ## 🔄 Complete Flow
 
@@ -381,6 +388,9 @@ DELETE http://localhost:8080/api/pedidos/{pedidoId}
 - Generates `OrderCancelled` event (original: `PedidoCancelado`)
 - Status in read model: `CANCELADO` (CANCELLED)
 
+---
+#### 📲 MongoDB Compass PrintScreen:
+![MongoDB](https://raw.githubusercontent.com/wekers/event-sourcing-project/refs/heads/mongodb/img/mongodb_complete_printscreen.png)
 ---
 
 ## 📊 System Flow Summary
