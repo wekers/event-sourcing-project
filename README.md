@@ -10,8 +10,8 @@ Events are propagated via **Debezium + Kafka**, ensuring consistency between wri
 ---
 
 ## Language
-- [Portuguese version of the README content](README_PT.md) <br/>
-- [English version of the README content](README_EN.md)
+- 🇺🇸 You are reading the English version.
+- 🇧🇷 [Portuguese version](README_PT.md)
 
 ---
 
@@ -372,8 +372,8 @@ Payload:
      - 2025-08-24T17:40:22Z - EM_PREPARACAO (IN_PREPARATION)
      - 2025-08-24T17:40:22Z - ENVIADO (SENT)
      - 2025-08-24T17:40:22Z - ENTREGUE (DELIVERED)
-Example: it cannot go back from ENTREGUE (DELIVERED) to EM_PREPARACAO (IN_PREPARATION)  
-or example: from CONFIRMADO (CONFIRMED) directly to ENVIADO (SENT)
+>Example: it cannot go back from **ENTREGUE (DELIVERED)** to **EM_PREPARACAO (IN_PREPARATION)**   
+or example: from **CONFIRMADO (CONFIRMED)** directly to **ENVIADO (SENT)**
 
 ### 6. Cancel Order
 

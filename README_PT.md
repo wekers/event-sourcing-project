@@ -10,9 +10,8 @@ Eventos são propagados via **Debezium + Kafka**, garantindo consistência entre
 ---
 
 ## Language
-- [Versão em Português do conteúdo do README](README_PT.md) <br/>
-- [English version of the README content](README.md)
-
+- 🇧🇷 Você está lendo a versão em Português.
+- 🇺🇸 [English version](https://github.com/wekers/event-sourcing-project/tree/mongodb)
 ---
 
 ## ⚙️ Diagrama de Arquitetura
@@ -368,8 +367,8 @@ Payload:
      - 2025-08-24T17:40:22Z - EM_PREPARACAO
 	 - 2025-08-24T17:40:22Z - ENVIADO
 	 - 2025-08-24T17:40:22Z - ENTREGUE
-ex.: não pode voltar de ENTREGUE para EM_PREPARACAO
-ou ex.: de CONFIRMADO para ENVIADO direto
+>ex.: não pode voltar de **ENTREGUE** para **EM_PREPARACAO**  
+ou ex.: de **CONFIRMADO** para **ENVIADO** direto
 
 ### 6. Cancelar Pedido
 
